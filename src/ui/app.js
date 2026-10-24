@@ -66,7 +66,7 @@ function topbar() {
   return h('header', { class: 'topbar' },
     h('button', { class: 'menu-btn icon-btn', onclick: () => root.firstChild.classList.toggle('nav-open'), 'aria-label': 'Menu' }, '☰'),
     h('div', { html: SWOOSH, style: { display: 'contents' } }),
-    h('a', { class: 'brand', href: '#dashboard', title: 'AERO MULT-MR ELEMENTS — Mauá Racing', html: '<img src="src/ui/assets/maua-racing.png" alt="Mauá Racing"><span class="sepv"></span><span class="brand-name">AERO MULT-<span class="mr">MR</span> ELEMENTS<small>Mauá Racing · aerodinâmica</small></span>' }),
+    h('a', { class: 'brand', href: '#dashboard', title: 'AERO MULT-MR ELEMENTS — Mauá Racing', html: '<img src="src/ui/assets/maua-racing-transparente.png" alt="Mauá Racing"><span class="sepv"></span><span class="brand-name">AERO MULT-<span class="mr">MR</span> ELEMENTS<small>Mauá Racing · aerodinâmica</small></span>' }),
     h('div', { class: 'ctx' },
       h('span', { class: 'muted' }, 'Projeto'), sel(st.projects, prj, (id) => store.setActive({ projectId: id }), '— sem projetos —'),
       h('span', { class: 'sep' }, '›'), h('span', { class: 'muted' }, 'Pacote'), sel(prj?.packages || [], pkg, (id) => store.setActive({ packageId: id }), '— sem pacotes —'),
