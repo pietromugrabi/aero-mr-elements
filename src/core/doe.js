@@ -2,7 +2,7 @@
 // um fator por vez (OAT), duplicatas e pivôs derivados da corda.
 
 import { parseNum } from './num.js';
-import { keys, withDerivedPivots, referenceInputs, topologyOf, pairOf, gurneyConfigured, isRelGap, gapBaseIndex } from './wing.js';
+import { keys, withDerivedPivots, referenceInputs, topologyOf, pairOf, gurneyConfigured, isRelGap, gapBaseIndex, buildWing } from './wing.js';
 
 export const LIMITS = Object.freeze({ warn: 100, confirm: 1000, max: 20000 });
 
@@ -131,7 +131,7 @@ export function findDuplicates(rows, ks) {
  *  chord: inválido se chord_n > chord_(n−1) ;  aoa: inválido se AoA_n < AoA_(n−1).
  * Slat e upperflap não entram (por construção têm corda/ângulo diferentes do principal).
  */
-export const DEFAULT_DOE_RULES = Object.freeze({ chord: true, aoa: true });
+export const DEFAULT_DOE_RULES = Object.freeze({ chord: true, aoa: true, geom: true });
 export const doeRules = (pkg) => ({ ...DEFAULT_DOE_RULES, ...(pkg.config.doeRules || {}) });
 
 /** Violações das regras para um conjunto de entradas (valores ausentes = referência). */
@@ -153,10 +153,30 @@ export function dpViolations(pkg, inputs) {
   return out;
 }
 
-/** Separa linhas válidas e inválidas pelas regras do pacote. */
-export function filterValidRows(pkg, rows) {
-  const valid = [], invalid = [];
-  rows.forEach((r) => { const v = dpViolations(pkg, r); (v.length ? invalid : valid).push(v.length ? { row: r, msgs: v } : r); });
+/** Erros de geometria de um DP já com valores derivados: interseção, auto-interseção, cota inválida... */
+export function dpGeometryErrors(pkg, inputs) {
+  let w;
+  try { w = buildWing(pkg, inputs); } catch (e) { return [`erro ao montar: ${e.message}`]; }
+  if (!w.plane) return w.errors.length ? w.errors : ['geometria incompleta'];
+  return w.asm.checks.filter((c) => c.level === 'erro').map((c) => c.msg);
+}
+
+/**
+ * Separa linhas válidas e inválidas pelas regras do pacote.
+ * Com geometry = true (e a regra geom ligada), também monta cada linha e descarta as com erro de geometria.
+ * @returns {{valid, invalid: [{row, msgs, kind: 'regra'|'geometria'}]}}
+ */
+export function filterValidRows(pkg, rows, { geometry = false, pivotScaling = true } = {}) {
+  const valid = [], invalid = [], geom = geometry && doeRules(pkg).geom;
+  rows.forEach((r) => {
+    const v = dpViolations(pkg, r);
+    if (v.length) { invalid.push({ row: r, msgs: v, kind: 'regra' }); return; }
+    if (geom) {
+      const g = dpGeometryErrors(pkg, withDerivedPivots(pkg, { ...referenceInputs(pkg), ...r }, pivotScaling));
+      if (g.length) { invalid.push({ row: r, msgs: g, kind: 'geometria' }); return; }
+    }
+    valid.push(r);
+  });
   return { valid, invalid };
 }
 

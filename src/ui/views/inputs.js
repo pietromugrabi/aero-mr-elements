@@ -98,9 +98,13 @@ export default function inputs(ctx) {
     if (nValid > LIMITS.confirm && !(await confirmBox('DOE grande', `Gerar ${nValid} Design Points? Cada um é uma simulação CFD.`, 'Gerar'))) return;
     if (!append && run.dps.some((d) => d.outputs) && !(await confirmBox('Substituir DPs', 'A rodada tem DPs com resultados. Substituir apaga esses resultados. Continuar?', 'Substituir', true))) return;
     let rows, removed = 0;
-    try { const s = filterValidRows(pkg, generateDesigns(doe.method, doe.levels, base)); rows = s.valid; removed = s.invalid.length; } catch (e) { toast(e.message, true); return; }
-    if (!rows.length) { toast('Todas as combinações são inválidas pelas regras (corda do flap maior / AoA menor que o elemento anterior). Ajuste os níveis.', true); return; }
-    if (removed) toast(`${removed} combinação(ões) inválida(s) descartada(s); ${rows.length} DP(s) gerado(s).`);
+    try {
+      const s = filterValidRows(pkg, generateDesigns(doe.method, doe.levels, base), { geometry: true, pivotScaling: doe.pivotScaling !== false });
+      rows = s.valid; removed = s.invalid.length;
+      const nGeo = s.invalid.filter((x) => x.kind === 'geometria').length;
+      if (!rows.length) { toast('Todas as combinações são inválidas (regras de corda/AoA ou erro de geometria). Ajuste os níveis.', true); return; }
+      if (removed) toast(`${removed} combinação(ões) descartada(s): ${removed - nGeo} pelas regras de corda/AoA, ${nGeo} por erro de geometria${nGeo ? ` (ex.: ${s.invalid.find((x) => x.kind === 'geometria').msgs[0]})` : ''}. ${rows.length} DP(s) gerado(s).`);
+    } catch (e) { toast(e.message, true); return; }
     store.update(() => {
       const start = append ? run.dps.length : 0;
       const dps = makeDesignPoints(pkg, rows, { pivotScaling: doe.pivotScaling !== false, startIndex: start, uid: () => uid('dp') });
@@ -116,7 +120,8 @@ export default function inputs(ctx) {
       checkField({ label: 'Pivôs acompanham a corda (pivot_n = pivot_ref/chord_ref·chord_n)', checked: doe.pivotScaling !== false, onChange: (v) => store.update(() => { doe.pivotScaling = v; run.dps.forEach((d) => { d.inputs = withDerivedPivots(pkg, d.inputs, v); }); }, ['DOE', run.name, 'escalonamento do pivô', String(v)]) })),
     h('div', { class: 'row', style: { marginBottom: '10px' } }, h('span', { class: 'lbl' }, 'Não gerar DPs inválidos:'),
       checkField({ label: 'flap com corda maior que o elemento anterior (chord_n > chord_(n−1))', checked: rules.chord, onChange: (v) => setRule('chord', v) }),
-      checkField({ label: 'flap com AoA menor que o elemento anterior (AoA_n < AoA_(n−1))', checked: rules.aoa, onChange: (v) => setRule('aoa', v) })),
+      checkField({ label: 'flap com AoA menor que o elemento anterior (AoA_n < AoA_(n−1))', checked: rules.aoa, onChange: (v) => setRule('aoa', v) }),
+      checkField({ label: 'com erro de geometria (elementos se atravessando, auto-interseção, cota inválida) — verificado ao gerar', checked: rules.geom, onChange: (v) => setRule('geom', v) })),
     refErr ? msgs([{ level: 'erro', msg: `${refErr} Corrija os valores de referência na Geometria.` }]) : null,
     doe.method !== 'manual' ? h('div', { class: 'table-wrap' }, h('table', null, h('thead', null, h('tr', null, ['Grupo', 'Variável', 'Referência', 'Níveis', 'Interpretação'].map((t) => h('th', null, t)))), h('tbody', null, levelRows))) : null,
     doe.method !== 'manual' ? h('p', { class: 'muted' }, 'Separe níveis por ";" ou espaço (vírgula decimal aceita: "2,5; 3,5"), ou use início:passo:fim. Variáveis sem níveis ficam no valor de referência. Um fator por vez: o ponto base + cada variável variando sozinha.') : null,
@@ -142,6 +147,20 @@ export default function inputs(ctx) {
     });
     i.addEventListener('keydown', (e) => { if (e.key === 'Enter') i.blur(); });
     return h('td', { class: 'num' }, i);
+  };
+  // Verifica todos os DPs e remove os do nível pedido ('erro' = interseção/cota inválida/regras; 'aviso' = folga abaixo do mínimo etc.)
+  const removeByLevel = async (level) => {
+    const checks = new Map(run.dps.map((d) => [d.id, checkDP(pkg, d)]));
+    const hit = run.dps.filter((d) => checks.get(d.id).level === level);
+    ui.checks = checks;
+    if (!hit.length) { toast(`Nenhum DP com ${level}.`); ctx.rerender(); return; }
+    const withRes = hit.filter((d) => d.outputs).length;
+    const what = level === 'erro' ? 'com erro (elementos se atravessando, auto-interseção, cota inválida ou regras de corda/AoA)' : 'com aviso (ex.: folga da fenda abaixo do mínimo, pivô fora do perfil)';
+    if (!(await confirmBox(`Remover DPs com ${level}`, `Remover ${hit.length} DP(s) ${what}: ${hit.slice(0, 8).map((d) => d.name).join(', ')}${hit.length > 8 ? '…' : ''}?${withRes ? ` ${withRes} deles têm resultados, que serão apagados.` : ''}`, 'Remover', true))) { ctx.rerender(); return; }
+    const ids = new Set(hit.map((d) => d.id));
+    store.update(() => { run.dps = run.dps.filter((d) => !ids.has(d.id)); }, ['DOE', run.name, `${hit.length} DP(s) com ${level} removido(s)`]);
+    ids.forEach((id) => { ui.checks.delete(id); sel.delete(id); });
+    toast(`${hit.length} DP(s) com ${level} removido(s).`);
   };
   const chk = ui.checks;
   const thead = h('thead', null,
@@ -172,7 +191,9 @@ export default function inputs(ctx) {
       h('span', { class: 'spacer' }),
       h('button', { class: 'small', onclick: () => { const t = exportT(false); copyText(toTSV(t.headers, t.rows)).then(() => toast('Tabela copiada (TSV) — cole numa planilha.')); } }, 'Copiar'),
       h('button', { class: 'small', onclick: () => pasteDialog(pkg, run) }, 'Colar…'),
-      h('button', { class: 'small', onclick: () => { ui.checks = new Map(run.dps.map((d) => [d.id, checkDP(pkg, d)])); ctx.rerender(); } }, 'Verificar geometria de todos')),
+      h('button', { class: 'small', onclick: () => { ui.checks = new Map(run.dps.map((d) => [d.id, checkDP(pkg, d)])); ctx.rerender(); } }, 'Verificar geometria de todos'),
+      h('button', { class: 'small danger', disabled: !run.dps.length || null, onclick: () => removeByLevel('erro') }, 'Remover DPs com erro'),
+      h('button', { class: 'small danger', disabled: !run.dps.length || null, onclick: () => removeByLevel('aviso') }, 'Remover DPs com aviso')),
     h('div', { class: 'row', style: { marginBottom: '8px' } }, h('span', { class: 'lbl' }, 'Exportar:'),
       h('button', { class: 'small', onclick: () => download(`${fname}.csv`, csvOf(exportT(false)), 'text/csv') }, 'CSV'),
       h('button', { class: 'small', onclick: () => download(`${fname}_ptBR.csv`, csvOf(exportT(false), true), 'text/csv') }, 'CSV (; e vírgula)'),

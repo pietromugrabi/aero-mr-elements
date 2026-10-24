@@ -117,7 +117,7 @@ Em Geometria, cada elemento escolhe **Gap / Overlap em**: mm ou **fração da co
 
 ## DPs inválidos
 
-Em Inputs / Design Points, as combinações em que um flap tem **corda maior** (`chord_n > chord_(n−1)`) ou **AoA menor** (`AoA_n < AoA_(n−1)`) que o seu elemento de referência não são geradas; o app avisa quantas foram descartadas. As duas regras podem ser desligadas na mesma tela. Slat e upperflap não entram nas regras. DPs colados ou editados à mão que violem as regras aparecem com erro em "Verificar geometria de todos".
+Em Inputs / Design Points, as combinações em que um flap tem **corda maior** (`chord_n > chord_(n−1)`) ou **AoA menor** (`AoA_n < AoA_(n−1)`) que o seu elemento de referência não são geradas; o app avisa quantas foram descartadas. Ao gerar, o app também monta cada combinação e descarta as com **erro de geometria** (elementos se atravessando, auto-interseção, cota inválida). As três regras podem ser desligadas na mesma tela. Slat e upperflap não entram nas regras de corda/AoA. Na tabela, **Remover DPs com erro** e **Remover DPs com aviso** (ex.: folga da fenda abaixo do mínimo) verificam todos os DPs e removem os do nível escolhido, com confirmação.
 
 ## Sugestões de chord, AoA, Gap e Overlap
 
