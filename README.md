@@ -119,6 +119,10 @@ Em Geometria, cada elemento escolhe **Gap / Overlap em**: mm ou **fração da co
 
 Em Inputs / Design Points, as combinações em que um flap tem **corda maior** (`chord_n > chord_(n−1)`) ou **AoA menor** (`AoA_n < AoA_(n−1)`) que o seu elemento de referência não são geradas; o app avisa quantas foram descartadas. Ao gerar, o app também monta cada combinação e descarta as com **erro de geometria** (elementos se atravessando, auto-interseção, cota inválida). As três regras podem ser desligadas na mesma tela. Slat e upperflap não entram nas regras de corda/AoA. Na tabela, **Remover DPs com erro** e **Remover DPs com aviso** (ex.: folga da fenda abaixo do mínimo) verificam todos os DPs e removem os do nível escolhido, com confirmação.
 
+## Gráficos (ECharts) e vista 3D (Three.js)
+
+A aba **Gráficos** usa o Apache ECharts: roda do mouse dá zoom nos eixos, os ícones no canto fazem zoom por área, restauram a vista e salvam PNG. Se o ECharts não carregar, o app volta para os gráficos SVG próprios. Em Geometria → Montagem, **Abrir vista 3D** mostra os elementos montados extrudados (Three.js): pela envergadura em estudos 3D; em 2D, com uma profundidade só visual (1,5 × a maior corda). As bibliotecas ficam em `src/vendor/` (ver `LEIA-ME.txt` lá) e funcionam sem internet.
+
 ## Mapa de conflito
 
 Geometria → aba **Mapa de conflito**. Escolha 2 variáveis (ex.: Gap_2 × Overlap_2 ou AoA_2 × Gap_2), as faixas e a resolução (15, 25 ou 40 pontos por eixo); as demais ficam no valor de referência. O app monta a asa em cada ponto e pinta: verde = OK, amarelo = aviso (folga da fenda abaixo do mínimo, pivô fora do perfil...), cinza = regra do DOE (corda/AoA), vermelho = erro (elementos se atravessando, auto-interseção, cota inválida). Mostra as faixas sem erro na linha e na coluna da referência; clicar numa célula mostra o motivo e permite gravar aqueles valores como referência. Uma grade 25 × 25 leva poucos segundos.

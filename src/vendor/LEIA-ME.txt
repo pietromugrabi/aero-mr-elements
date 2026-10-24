@@ -1,0 +1,8 @@
+Bibliotecas de terceiros, copiadas do jsDelivr (npm) para o site funcionar sem internet:
+
+- echarts.min.js        Apache ECharts 5.5.1 (echarts@5.5.1/dist/echarts.min.js) — Licença Apache 2.0 — https://echarts.apache.org
+- three.module.min.js   Three.js r169 (three@0.169.0/build/three.module.min.js) — Licença MIT — https://threejs.org
+- OrbitControls.js      Three.js r169 (three@0.169.0/examples/jsm/controls/OrbitControls.js) — Licença MIT
+                        Única alteração: o import de 'three' aponta para './three.module.min.js'.
+
+Usadas em: aba Gráficos (ECharts) e Geometria → Montagem → Vista 3D (Three.js). As duas carregam só quando a tela é aberta.

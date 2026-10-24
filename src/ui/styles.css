@@ -316,6 +316,12 @@ tr:hover td { background: var(--surface-2); }
 .brand-name { font-family: var(--display-font); letter-spacing: .06em; }
 .brand-name small { text-transform: none; letter-spacing: .02em; font-size: 11px; }
 
+/* Números em fonte monoespaçada (tabelas, medições, células editáveis, indicadores): colunas alinhadas
+   dígito a dígito. Usa Roboto Mono / Geist Mono se instaladas; senão Cascadia Mono / Consolas (Windows). */
+:root { --num-font: "Roboto Mono", "Geist Mono", "Cascadia Mono", Consolas, ui-monospace, monospace; }
+td.num, td input.cell, .kv dd, .stat, .tnum, .title-block dd .tnum { font-family: var(--num-font); font-size: .94em; letter-spacing: -.01em; }
+.stat { font-size: 30px; }
+
 /* Barras de rolagem discretas */
 * { scrollbar-width: thin; scrollbar-color: #3a3a3a transparent; }
 :root[data-theme="light"] * { scrollbar-color: #b5b5b5 transparent; }

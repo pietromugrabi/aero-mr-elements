@@ -1,7 +1,7 @@
 import { h, card, msgs, badge, checkField, selectField, promptBox, download, safeName, fv, exampleBanner, table } from '../dom.js';
 import * as store from '../store.js';
 import { needs, pageHead } from '../common.js';
-import { xyChart, barChart, heatmapChart } from '../plots.js';
+import { xyChart, barChart, heatmapChart } from '../echarts-plots.js';
 import { collectRecords, filterRecords, buildSeries, heatmapGrid, fitResponseSurface, ranking, valueOf, refWarnings, varyingInputs } from '../../core/chartdata.js';
 import { metricList } from '../../core/outputs.js';
 import { toCSV } from '../../core/csv.js';
@@ -162,7 +162,7 @@ export default function graficos(ctx) {
   }
   const csvHeaders = { xy: ['série', 'x', 'valor x', 'y', 'valor y', 'DP', 'pacote', 'rodada', 'exemplo'], scatter: ['série', 'x', 'valor x', 'y', 'valor y', 'DP', 'pacote', 'rodada', 'exemplo'], heatmap: ['x', 'valor x', 'y', 'valor y', 'métrica', 'valor', 'nº DPs', 'DPs'], surface: ['x', 'valor x', 'y', 'valor y', 'métrica', 'CFD', 'ajuste', 'DP'], ranking: ['DP', 'pacote', 'rodada', 'métrica', 'valor'], matrix: ['grupo', 'DPs', 'Cl máx', 'Cl/Cd máx', 'Cd mín', 'L máx', 'D mín'] }[cfg.type];
   return h('div', null,
-    pageHead('Gráficos', 'Escolha X/Y, filtros e agrupamentos. Cada métrica tem seu próprio gráfico (sem eixo duplo). Passe o mouse para ver o DP.',
+    pageHead('Gráficos', 'Escolha X/Y, filtros e agrupamentos. Cada métrica tem seu próprio gráfico (sem eixo duplo). Passe o mouse para ver o DP; roda do mouse dá zoom, e os ícones no canto salvam PNG ou restauram a vista.',
       h('button', { disabled: !csvRows.length || null, onclick: () => download(`${safeName(`grafico_${cfg.type}`)}.csv`, toCSV(csvHeaders, csvRows), 'text/csv') }, 'Exportar dados (CSV)')),
     isEx ? exampleBanner() : null,
     panel,

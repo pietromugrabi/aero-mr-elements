@@ -14,6 +14,7 @@ import { fmt } from '../../core/num.js';
 import { suggestConfig, suggestGeometry, applySuggestion, levelsText, DEFAULT_SUGGEST, RULE_FIELDS } from '../../core/suggest.js';
 import { clone } from '../../core/model.js';
 import { conflictVariables, defaultRange, makeGrid, evalCell, summarize, validRuns } from '../../core/conflict.js';
+import { wing3D } from '../view3d.js';
 
 const pt = (p, d = 3) => (p ? `(${fmt(p[0], d)}; ${fmt(p[1], d)})` : '—');
 
@@ -274,7 +275,23 @@ function assemblyTab(pkg, w, ctx) {
   const toggles = h('div', { class: 'row' }, [['pivots', 'Pivôs'], ['chords', 'Cordas'], ['gaps', 'Gap/overlap'], ['clearance', 'Folga mínima'], ['vectors', 'Vetores'], ['labels', 'Rótulos']].map(([k, l]) => checkField({ label: l, checked: ui.show[k], onChange: (v) => { ui.show[k] = v; plot.redraw(); } })));
   return h('div', null,
     card('Montagem 2D', toggles, h('div', { style: { height: '8px' } }), plot),
-    h('div', { class: 'grid g-side' }, card('Ajuste ao vivo', liveControls(pkg, null, meas, plot)), card('Medições e verificações', meas)));
+    h('div', { class: 'grid g-side' }, card('Ajuste ao vivo', liveControls(pkg, null, meas, plot)), card('Medições e verificações', meas)),
+    view3dCard(pkg, w, ctx));
+}
+
+/** Vista 3D (Three.js), aberta sob demanda para não carregar a biblioteca sem necessidade. */
+function view3dCard(pkg, w, ctx) {
+  const ui = ctx.ui;
+  const c = pkg.config, is3D = c.mode === '3D' && Number(c.span_mm) > 0;
+  const depth = is3D ? Number(c.span_mm) : Math.round(1.5 * Math.max(...w.plane.map((e) => e.chord)));
+  const note = is3D ? `Extrusão pela envergadura do pacote: ${fmt(depth, 0)} mm.` : `Estudo 2D: a profundidade de ${fmt(depth, 0)} mm é só para visualização (1,5 × a maior corda), não é a envergadura.`;
+  if (!ui.show3d) return card('Vista 3D', h('p', { class: 'muted', style: { marginTop: 0 } }, note), h('button', { onclick: () => { ui.show3d = true; ctx.rerender(); } }, 'Abrir vista 3D'));
+  const view = wing3D(w, depth, { height: 440 });
+  return card('Vista 3D', h('p', { class: 'muted', style: { marginTop: 0 } }, `${note} Arraste para girar, roda do mouse para zoom, botão direito para mover.`), view,
+    h('div', { class: 'row', style: { marginTop: '8px' } },
+      h('button', { class: 'small', onclick: () => view.reset?.() }, 'Restaurar vista'),
+      h('button', { class: 'small', onclick: () => { const u = view.png?.(); if (u) { const a = document.createElement('a'); a.href = u; a.download = `${pkg.name}_3D.png`; a.click(); } } }, 'Salvar PNG'),
+      h('button', { class: 'small', onclick: () => { ui.show3d = false; ctx.rerender(); } }, 'Fechar vista 3D')));
 }
 
 // ------------------------------------------------------------------ Aba Sugestões
