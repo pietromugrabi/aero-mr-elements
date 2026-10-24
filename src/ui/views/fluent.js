@@ -4,6 +4,7 @@ import { needs, pageHead } from '../common.js';
 import { referenceValues, reportDefinitions, checkReports, parameterTable, boundaryConditions, forceVectors, DEFAULT_FLUENT } from '../../core/fluent.js';
 import { doeVariables, derivedColumns } from '../../core/doe.js';
 import { fluentSetupMD } from '../../core/export.js';
+import { mathInline } from '../math.js';
 import { parseNum } from '../../core/num.js';
 
 export function inputKeysOf(pkg, run) {
@@ -52,7 +53,7 @@ export default function fluent(ctx) {
       h('h3', null, 'Valores calculados (referência do pacote)'),
       h('div', { class: 'kv' },
         h('dt', null, 'A_ref'), h('dd', null, `${fv(ref.Aref, 6)} m²`), h('dt', null, 'L_ref'), h('dd', null, `${fv(ref.Lref, 6)} m`),
-        h('dt', null, 'q∞ = ½ρU²'), h('dd', null, `${fv(ref.q, 6)} Pa`), h('dt', null, 'Re (L_ref)'), h('dd', null, Number.isFinite(ref.Re) ? ref.Re.toExponential(3) : '—'),
+        h('dt', null, mathInline('q∞ = ½ρU²')), h('dd', null, `${fv(ref.q, 6)} Pa`), h('dt', null, 'Re (L_ref)'), h('dd', null, Number.isFinite(ref.Re) ? ref.Re.toExponential(3) : '—'),
         h('dt', null, 'A_ref por elemento'), h('dd', null, ref.Ael.map((a) => `${fv(a, 4)}`).join(' / ') + ' m²')),
       msgs([...ref.errors.map((m) => ({ level: 'erro', msg: m })), ...ref.notes.map((m) => ({ level: 'info', msg: m })), ...(!(Number(f.Uinf) > 0) ? [{ level: 'erro', msg: 'Informe Uinf.' }] : [])])),
       card('Direções e nomes', h('div', { class: 'fields' },

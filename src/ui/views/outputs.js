@@ -1,6 +1,7 @@
 import { h, card, msgs, badge, checkField, seg, confirmBox, toast, pickFile, download, safeName, fv, exampleBanner } from '../dom.js';
 import * as store from '../store.js';
 import { needs, pageHead, hasExample } from '../common.js';
+import { mathBlock } from '../math.js';
 import { readOutputsText, planImport, computeDP, expectedOutputFields } from '../../core/outputs.js';
 import { doeVariables, derivedColumns } from '../../core/doe.js';
 import { outputsTable, csvOf, xlsxOf } from '../../core/export.js';
@@ -108,7 +109,7 @@ export default function outputs(ctx) {
       h('button', { class: 'small', onclick: () => download(`${fname}.xlsx`, new Blob([xlsxOf([{ name: 'Saidas', ...outputsTable(prj, pkg, run, opts) }])], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })) }, 'Excel (.xlsx)'),
       h('button', { class: 'small danger', disabled: !withRes.length || null, onclick: async () => { if (await confirmBox('Apagar resultados', `Apagar os resultados importados dos ${withRes.length} DP(s) desta rodada? As entradas são mantidas.`, 'Apagar', true)) store.update(() => { run.dps.forEach((d) => { d.outputs = null; d.status = 'pendente'; }); }, ['outputs', run.name, 'resultados apagados']); } }, 'Apagar resultados')),
     withRes.length ? h('div', { class: 'table-wrap tall' }, tbl) : h('div', { class: 'empty' }, 'Sem resultados nesta rodada. Importe o CSV do Workbench acima.'),
-    h('div', { class: 'eq', style: { marginTop: '10px' } }, 'q = ½·ρ·U²   CL = L / (q·A_ref)   CD = D / (q·A_ref)   Cl/Cd só quando CD ≠ 0\nTotais = relatório total do Fluent (ou Σ elementos, se marcado). Nunca são médias. Valores calculados não são gravados: são recalculados a partir dos dados brutos.'));
+    mathBlock('q = ½·ρ·U²   CL = L / (q·A_ref)   CD = D / (q·A_ref)   Cl/Cd só quando CD ≠ 0\nTotais = relatório total do Fluent (ou Σ elementos, se marcado). Nunca são médias. Valores calculados não são gravados: são recalculados a partir dos dados brutos.', { style: { marginTop: '10px' } }));
 
   const reportBtn = h('button', { class: 'primary', onclick: () => { try { download(safeName(`Relatorio_${pkg.name}_${run.name}`) + '.xlsx', new Blob([runReportXlsx(prj, pkg, run, opts)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })); } catch (e) { toast(`Falha ao gerar o relatório: ${e.message}`, true); } } }, 'Baixar relatório completo (Excel)');
   return h('div', null, pageHead(`Outputs — ${run.name}`, 'Resultados por Design Point: dados brutos importados e coeficientes calculados (separados).', reportBtn),

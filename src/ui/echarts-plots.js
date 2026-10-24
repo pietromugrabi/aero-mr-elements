@@ -123,7 +123,7 @@ export function heatmapChart(data, opts = {}) {
     const ink = (z) => (((z - zmin) / (zmax - zmin || 1)) > 0.55 !== th.dark ? '#ffffff' : '#0b0b0b');
     const cells = [];
     grid.forEach((row, iy) => row.forEach((c, ix) => { if (c) cells.push({ value: [ix, iy, c.z], c, label: { color: ink(c.z) }, itemStyle: c.n > 1 ? { borderColor: th.warn, borderWidth: 2 } : undefined }); }));
-    const ramp = Array.from({ length: 13 }, (_, k) => seqColor(k / 12, th.dark));
+    const ramp = Array.from({ length: 9 }, (_, k) => seqColor(k / 8, th.dark));
     const showLabels = !opts.noLabels && xs.length <= 12 && ys.length <= 12;
     // DPs de CFD: posição contínua convertida para o índice (fracionário) da grade
     const idx = (v, arr) => ((v - arr[0]) / ((arr[arr.length - 1] - arr[0]) || 1)) * (arr.length - 1);

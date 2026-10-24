@@ -2,6 +2,7 @@
 import { h, toast } from './dom.js';
 import * as store from './store.js';
 import { projectHasExample, SWOOSH } from './common.js';
+import { installMathCopy } from './math.js';
 import dashboard from './views/dashboard.js';
 import projetos from './views/projetos.js';
 import geometria from './views/geometria.js';
@@ -134,6 +135,7 @@ store.subscribe((kind) => {
   render();
 });
 window.addEventListener('beforeunload', () => { store.flush(); });
+installMathCopy(); // Ctrl+C em fórmulas devolve o texto digitado original
 
 (async () => {
   try { await store.load(); } catch (e) { toast(`Falha ao carregar dados: ${e.message}`, true); }

@@ -119,6 +119,14 @@ Em Geometria, cada elemento escolhe **Gap / Overlap em**: mm ou **fração da co
 
 Em Inputs / Design Points, as combinações em que um flap tem **corda maior** (`chord_n > chord_(n−1)`) ou **AoA menor** (`AoA_n < AoA_(n−1)`) que o seu elemento de referência não são geradas; o app avisa quantas foram descartadas. Ao gerar, o app também monta cada combinação e descarta as com **erro de geometria** (elementos se atravessando, auto-interseção, cota inválida). As três regras podem ser desligadas na mesma tela. Slat e upperflap não entram nas regras de corda/AoA. Na tabela, **Remover DPs com erro** e **Remover DPs com aviso** (ex.: folga da fenda abaixo do mínimo) verificam todos os DPs e removem os do nível escolhido, com confirmação.
 
+## Fórmulas
+
+As equações (Geometria → Convenções e equações, Geometria → Configuração geral, Outputs e Fluent) são desenhadas com frações empilhadas, raízes, matrizes, índices e Σ (`src/ui/math.js`, sem biblioteca externa). O texto continua sendo o texto digitado: selecionar e dar Ctrl+C (ou o botão **Copiar** de cada bloco) copia exatamente o texto original, por exemplo `CL = L / (q·A_ref)`.
+
+## Celular
+
+Em pé: cabeçalho em duas linhas (marca e tema; projeto › pacote › rodada), uma coluna de campos, abas roláveis na horizontal e menu deslizante com fundo escurecido. Deitado: barra numa linha só que rola junto com a página, carimbo compacto e duas colunas. Em telas de toque os controles têm pelo menos 44 px e as margens respeitam o entalhe da tela.
+
 ## Gráficos (ECharts) e vista 3D (Three.js)
 
 A aba **Gráficos** usa o Apache ECharts: roda do mouse dá zoom nos eixos, os ícones no canto fazem zoom por área, restauram a vista e salvam PNG. Se o ECharts não carregar, o app volta para os gráficos SVG próprios. Em Geometria → Montagem, **Abrir vista 3D** mostra os elementos montados extrudados (Three.js): pela envergadura em estudos 3D; em 2D, com uma profundidade só visual (1,5 × a maior corda). As bibliotecas ficam em `src/vendor/` (ver `LEIA-ME.txt` lá) e funcionam sem internet.

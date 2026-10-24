@@ -15,6 +15,7 @@ import { suggestConfig, suggestGeometry, applySuggestion, levelsText, DEFAULT_SU
 import { clone } from '../../core/model.js';
 import { conflictVariables, defaultRange, makeGrid, evalCell, summarize, validRuns } from '../../core/conflict.js';
 import { wing3D } from '../view3d.js';
+import { mathBlock } from '../math.js';
 
 const pt = (p, d = 3) => (p ? `(${fmt(p[0], d)}; ${fmt(p[1], d)})` : '—');
 
@@ -35,7 +36,7 @@ function generalCard(pkg) {
       selectField({ label: 'Sinal em Y (vertical)', value: String(t.sy), options: [['-1', 'Y = −y_dat·c (padrão, asa invertida)'], ['1', 'Y = +y_dat·c']], onChange: (v) => store.update(() => { t.sy = Number(v); }, ['geometria', pkg.name, 'transformação sy', v]) }),
       selectField({ label: 'Plano do esboço', value: t.plane, options: [['XY', 'XY (Plano Frontal)'], ['XZ', 'XZ (Plano Superior)'], ['YZ', 'YZ (Plano Lateral)']], onChange: (v) => store.update(() => { t.plane = v; }, ['geometria', pkg.name, 'plano', v]) }),
     ),
-    h('div', { class: 'eq', style: { marginTop: '10px' } }, `${describeTransform(t)}\nEscoamento no sentido ${d.flowLabel} · sustentação positiva no sentido ${d.liftLabel}${t.sy < 0 ? ' (downforce para asa invertida)' : ''}\nA escala pela corda é aplicada uma única vez (o .dat é sempre normalizado antes).`),
+    mathBlock(`${describeTransform(t)}\nEscoamento no sentido ${d.flowLabel} · sustentação positiva no sentido ${d.liftLabel}${t.sy < 0 ? ' (downforce para asa invertida)' : ''}\nA escala pela corda é aplicada uma única vez (o .dat é sempre normalizado antes).`, { style: { marginTop: '10px' } }),
     h('div', { class: 'row', style: { marginTop: '10px' } },
       h('button', { onclick: async () => { if (await confirmBox('Preencher com o estudo de referência', 'Substitui perfis e cotas de referência dos 3 primeiros elementos pelos valores do estudo de referência (S1223, 140/90/60 mm, 3/18/33°...). Continuar?', 'Preencher')) store.update(() => { if (c.elements.length < 3) setElementCount(c, 3); applyReferenceStudy(pkg, S1223_DAT, 'S1223', { gurneyOn: c.elements.some((e) => e.gurney?.enabled) }); }, ['geometria', pkg.name, 'preenchido com estudo de referência']); } }, 'Preencher com valores do estudo de referência'),
       h('small', { class: 'muted' }, 'Valores de exemplo (cotas DS_ do modelo de referência).'),
@@ -517,7 +518,7 @@ function conventionsTab(pkg) {
         numField({ label: 'Folga mínima aceitável na fenda', unit: 'mm', value: cv.clearanceMin, key: 'clmin', onChange: (v) => set('clearanceMin', v ?? 1, 'folga mínima') }),
         h('div', { class: 'field' }, h('label', null, 'Regras de cotas do SolidWorks'), checkField({ label: 'Validar (sem cota 0/negativa, AoA ≥ 0, dTE > off)', checked: cv.swRules, onChange: (v) => set('swRules', v, 'regras SolidWorks') })))),
     card('Equações (referencial do perfil: x = escoamento, y = sustentação/sucção, mm)',
-      h('div', { class: 'eq' }, `Pivô local (BA=(0,0), BF=(c,0)):
+      mathBlock(`Pivô local (BA=(0,0), BF=(c,0)):
   s = √(pivot_dTE² − pivot_off²)   (euclidiana)   |   s = pivot_dTE   (ao longo da corda)
   P_local = (c − s, ±pivot_off)     (+ sucção, − pressão)
 

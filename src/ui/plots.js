@@ -16,11 +16,18 @@ export function theme() {
 
 // Escala sequencial de um só matiz (vermelho Mauá Racing): claro → escuro.
 const SEQ_LIGHT = ['#fde6e3', '#fbd0ca', '#f8b3a9', '#f49587', '#ef7766', '#e85a47', '#e03d2b', '#d0281a', '#b81d12', '#9e150d', '#850f09', '#6b0a06', '#520604'];
+// Âncoras validadas (validador de paletas da skill dataviz): um só matiz, claridade monotônica, degraus
+// visíveis e o valor mínimo com contraste ≥ 2:1 contra o painel de cada tema. Entre âncoras, interpolação.
+export const RAMP_LIGHT = ['#f49587', '#e85a47', '#d0281a', '#9e150d', '#520604'];
+export const RAMP_DARK = ['#9e150d', '#d0281a', '#e85a47', '#f49587', '#fbd0ca'];
+const hex = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
 export function seqColor(t, dark) {
-  const ramp = dark ? SEQ_LIGHT.slice().reverse() : SEQ_LIGHT;
-  const k = Math.max(0, Math.min(ramp.length - 1, Math.round(t * (ramp.length - 1))));
-  return ramp[k];
+  const ramp = dark ? RAMP_DARK : RAMP_LIGHT;
+  const x = Math.max(0, Math.min(1, Number.isFinite(t) ? t : 0)) * (ramp.length - 1), k = Math.min(ramp.length - 2, Math.floor(x)), f = x - k;
+  const a = hex(ramp[k]), b = hex(ramp[k + 1]);
+  return `#${a.map((v, i) => Math.round(v + (b[i] - v) * f).toString(16).padStart(2, '0')).join('')}`;
 }
+void SEQ_LIGHT;
 
 export function niceTicks(min, max, n = 6) {
   if (!(Number.isFinite(min) && Number.isFinite(max))) return [];
