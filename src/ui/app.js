@@ -96,6 +96,7 @@ function sidebar() {
 }
 
 let lastMainScroll = 0;
+let routeChanged = false; // animação de entrada só quando a rota muda de fato (não a cada atualização de estado)
 export function render() {
   const sct = SECTIONS.find((x) => x.id === route) || SECTIONS[0];
   const ctx = { project: store.activeProject(), pkg: store.activePackage(), run: store.activeRun(), state: store.getState(), ui: (viewState[sct.id] = viewState[sct.id] || {}), rerender: render, go: (r) => { location.hash = r; } };
@@ -105,9 +106,20 @@ export function render() {
   if (oldMain) lastMainScroll = oldMain.scrollTop;
   let content;
   try { content = sct.view(ctx); } catch (e) { console.error(e); content = h('div', { class: 'card' }, h('h2', null, 'Erro ao desenhar esta tela'), h('pre', { class: 'out' }, String(e.stack || e))); }
+  // transições: rota nova → entrada da tela; mesma rota com outra aba ativa → entrada só do conteúdo da aba
+  const prevTab = oldMain?.querySelector('.tabs button.on')?.textContent;
+  if (content instanceof Element) {
+    if (routeChanged) content.classList.add('route-enter');
+    else {
+      const tabEl = content.querySelector('.tabs button.on');
+      if (prevTab != null && tabEl && tabEl.textContent !== prevTab) content.classList.add('tab-enter');
+    }
+  }
+  routeChanged = false;
   const main = h('main', { class: 'main' }, content);
   const wasOpen = root.firstChild?.classList?.contains('nav-open');
-  root.replaceChildren(h('div', { class: 'app' + (wasOpen ? ' nav-open' : '') }, topbar(), sidebar(), main));
+  const scrim = h('div', { class: 'nav-scrim', 'aria-hidden': 'true', onclick: () => root.firstChild.classList.remove('nav-open') });
+  root.replaceChildren(h('div', { class: 'app' + (wasOpen ? ' nav-open' : '') }, topbar(), sidebar(), scrim, main));
   main.scrollTop = lastMainScroll;
   if (focusKey) {
     const el = main.querySelector(`[data-k="${CSS.escape(focusKey)}"]`);
@@ -116,7 +128,7 @@ export function render() {
   document.title = `${sct.label} — AERO MULT-MR ELEMENTS`;
 }
 
-window.addEventListener('hashchange', () => { route = (location.hash || '#dashboard').slice(1).split('?')[0]; lastMainScroll = 0; render(); });
+window.addEventListener('hashchange', () => { const r = (location.hash || '#dashboard').slice(1).split('?')[0]; routeChanged = r !== route; route = r; lastMainScroll = 0; render(); });
 store.subscribe((kind) => {
   if (kind === 'save') { const el = document.getElementById('savestate'); if (el) el.textContent = saveText(); return; }
   render();

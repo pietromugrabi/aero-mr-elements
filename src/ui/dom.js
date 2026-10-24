@@ -107,12 +107,14 @@ export function toast(msg, isErr = false) {
   if (!toastBox) { toastBox = h('div', { class: 'toasts' }); document.body.append(toastBox); }
   const t = h('div', { class: 'toast' + (isErr ? ' err' : '') }, msg);
   toastBox.append(t);
-  setTimeout(() => t.remove(), isErr ? 6000 : 3200);
+  // mesmo tempo de exibição de antes; a saída suave dura 180 ms a mais
+  setTimeout(() => { t.classList.add('leaving'); setTimeout(() => t.remove(), 180); }, isErr ? 6000 : 3200);
 }
 
 export function modal(title, body, actions = []) {
   return new Promise((resolve) => {
-    const close = (v) => { bg.remove(); resolve(v); };
+    // resolve na hora (a ação não espera a animação); o diálogo só some depois da saída suave
+    const close = (v) => { if (bg.classList.contains('closing')) return; bg.classList.add('closing'); resolve(v); setTimeout(() => bg.remove(), 150); };
     const bg = h('div', { class: 'modal-bg', onclick: (e) => { if (e.target === bg) close(null); } },
       h('div', { class: 'modal', role: 'dialog' }, h('h2', null, title), body,
         h('div', { class: 'row end', style: { marginTop: '14px' } }, actions.map((a) => h('button', { class: a.primary ? 'primary' : a.danger ? 'danger' : '', onclick: () => close(a.value) }, a.label)))));
