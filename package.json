@@ -1,0 +1,12 @@
+{
+  "name": "aero-multielemento",
+  "version": "1.0.0",
+  "description": "Preparação, organização e análise de estudos CFD de perfis multielemento (SolidWorks + ANSYS Workbench/Fluent). Sem dependências.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs 8765",
+    "test": "node tests/run-node.mjs"
+  },
+  "engines": { "node": ">=18" }
+}

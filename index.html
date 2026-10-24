@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AERO MULT-MR ELEMENTS — Mauá Racing</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23000'/%3E%3Cpath d='M3 22 C10 12 22 10 30 13' stroke='%23fff' stroke-width='2' fill='none'/%3E%3Ctext x='16' y='27' font-family='Georgia,serif' font-weight='700' font-size='11' text-anchor='middle' fill='%23e10600'%3EMR%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="src/ui/styles.css">
+<script>
+  // tema salvo antes de desenhar (padrão: escuro, identidade Mauá Racing)
+  try { if (localStorage.getItem('aero-tema') === 'light') document.documentElement.dataset.theme = 'light'; } catch (e) {}
+</script>
+</head>
+<body style="background:#050505;color:#f5f5f5">
+<div id="app">
+  <div style="padding:40px;font-family:system-ui,sans-serif;max-width:640px">
+    <img src="src/ui/assets/maua-racing.png" alt="Mauá Racing" style="height:90px">
+    <h1 style="font-family:Georgia,serif;letter-spacing:2px">AERO MULT-<span style="color:#e10600;font-style:italic">MR</span> ELEMENTS</h1>
+    <p id="boot-msg">Carregando…</p>
+  </div>
+</div>
+<script>
+  if (location.protocol === 'file:') {
+    document.getElementById('boot-msg').innerHTML = 'Este aplicativo precisa ser aberto por um servidor local (módulos JavaScript não funcionam em <code>file://</code>).<br><br>' +
+      'No Windows, dê duplo clique em <b>iniciar.bat</b> nesta pasta (ou rode <code>powershell -ExecutionPolicy Bypass -File iniciar.ps1</code>) e abra <b>http://localhost:8765/</b>.<br>Com Node.js: <code>node server.mjs</code>. Veja o README.md.';
+  }
+</script>
+<script type="module" src="src/ui/app.js"></script>
+</body>
+</html>
