@@ -15,6 +15,7 @@ $mime = @{
   '.css' = 'text/css; charset=utf-8'; '.json' = 'application/json; charset=utf-8'; '.svg' = 'image/svg+xml'
   '.png' = 'image/png'; '.ico' = 'image/x-icon'; '.dat' = 'text/plain; charset=utf-8'; '.csv' = 'text/csv; charset=utf-8'
   '.md' = 'text/markdown; charset=utf-8'; '.txt' = 'text/plain; charset=utf-8'
+  '.ttf' = 'font/ttf'; '.otf' = 'font/otf'; '.woff' = 'font/woff'; '.woff2' = 'font/woff2'
 }
 
 $listener = New-Object System.Net.HttpListener

@@ -1,11 +1,8 @@
-/* Fonte de títulos: Longhaul. Usada se estiver instalada no computador ou se o arquivo for colocado
-   em src/ui/assets/fonts/ (Longhaul.woff2, .woff, .otf ou .ttf). Sem ela, cai para Bahnschrift
-   (Windows) e depois para fontes do sistema. */
+/* Fonte de títulos: Longhaul (James Barnardo), arquivo em src/ui/assets/fonts/Longhaul.ttf ou instalada
+   no computador. Sem ela, cai para Bahnschrift (Windows) e depois para fontes do sistema. */
 @font-face {
   font-family: "Longhaul";
-  src: local("Longhaul"), local("Longhaul Regular"),
-       url("assets/fonts/Longhaul.woff2") format("woff2"), url("assets/fonts/Longhaul.woff") format("woff"),
-       url("assets/fonts/Longhaul.otf") format("opentype"), url("assets/fonts/Longhaul.ttf") format("truetype");
+  src: local("Longhaul"), url("assets/fonts/Longhaul.ttf") format("truetype");
   font-display: swap;
 }
 /* Identidade visual Mauá Racing: preto, vermelho e branco. Tema escuro é o padrão. */

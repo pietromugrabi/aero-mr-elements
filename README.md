@@ -113,7 +113,7 @@ ZIP/XLSX, relatório Excel com gráficos, slat, Gurney parametrizado e migraçã
 
 ## Fonte dos títulos (Longhaul)
 
-Os títulos usam a fonte **Longhaul** quando ela está instalada no computador ou quando o arquivo é colocado em `src/ui/assets/fonts/` (`Longhaul.woff2`, `.woff`, `.otf` ou `.ttf`). Sem ela, o site usa Bahnschrift (Windows). Confira a licença da fonte antes de publicá-la.
+Os títulos usam a fonte **Longhaul**, de James Barnardo, pelo arquivo `src/ui/assets/fonts/Longhaul.ttf` (ou pela fonte instalada no computador). Sem ela, o site usa Bahnschrift (Windows). Os termos do autor estão em `src/ui/assets/fonts/YOU DECIDE PRICE OF LICENSE.txt`; o uso comercial exige licença paga ao autor.
 
 ## Relatório Excel de cada rodada
 
