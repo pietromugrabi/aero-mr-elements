@@ -111,6 +111,14 @@ ZIP/XLSX, relatório Excel com gráficos, slat, Gurney parametrizado e migraçã
   Gap > 0 = acima (lado de pressão na asa invertida). Nomes DS_: `DS_gap{ref}{n}`, `DS_overlap{ref}{n}` ou `DS_stagger{ref}{n}`.
 - Para experimentar slat, upperflap e Gurney, use os botões *+ Adicionar slat*, *+ Adicionar upperflap* e *+ Definir Gurney flap* em Geometria (o exemplo padrão não traz nenhum deles).
 
+## Gap/Overlap em fração da corda
+
+Em Geometria, cada elemento escolhe **Gap / Overlap em**: mm ou **fração da corda (x/c)**. Em fração, informe por exemplo `Gap_ref_2 / chord_1 = 0,01` (1 % da corda) e escolha a corda base: a do elemento de referência (padrão), a do próprio elemento ou a do principal. O app converte para mm (`Gap_2 = Gap_2/c · chord_base`) na montagem, nas cotas DS_ e nas exportações. No DOE, a variável passa a ser `Gap_2/c` e o `Gap_2` em mm vira coluna derivada: se a corda variar, o gap acompanha.
+
+## Sugestões de chord, AoA, Gap e Overlap
+
+Geometria → aba **Sugestões**. Faixas editáveis por tipo (flap, slat, upperflap), relativas ao elemento de referência: `chord_n = razão · chord_ref`, `AoA_n = AoA_ref + ΔAoA`, `Gap/Overlap = fração · chord_ref`. Opcionalmente, informe a corda total disponível para dividi-la entre os elementos. Os padrões de flap e slat são faixas típicas de partida, não valores otimizados; o upperflap vem vazio. Botões: **Aplicar valores centrais na geometria** (os pivôs escalam com a corda) e **Níveis no DOE** (mín; centro; máx de AoA, Gap e Overlap na rodada ativa).
+
 ## Fonte dos títulos (Longhaul)
 
 Os títulos usam a fonte **Longhaul**, de James Barnardo, pelo arquivo `src/ui/assets/fonts/Longhaul.ttf` (ou pela fonte instalada no computador). Sem ela, o site usa Bahnschrift (Windows). Os termos do autor estão em `src/ui/assets/fonts/YOU DECIDE PRICE OF LICENSE.txt`; o uso comercial exige licença paga ao autor.

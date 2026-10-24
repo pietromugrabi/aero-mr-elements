@@ -143,11 +143,11 @@ export function parameterTable(pkg, inputKeys) {
   const nm = { ...DEFAULT_FLUENT.names, ...(f.names || {}) };
   const rows = [];
   let p = 1;
-  (inputKeys || []).filter((k) => k !== 'Uinf').forEach((k) => {
+  (inputKeys || []).filter((k) => k !== 'Uinf' && !/_c$/.test(k)).forEach((k) => { // Gap_n_c: fração, vira DS_gap (mm) derivado
     const unit = /^AoA/.test(k) ? '°' : 'mm';
     const ds = dsName(k, pkg);
     if (/^gurney_on_/.test(k)) { rows.push({ param: `P${p++}`, name: k, appKey: k, kind: 'Entrada', unit: '0/1', source: 'NÃO é cota DS_: Gurney ligado/desligado', note: 'use configurações/peças separadas (com e sem Gurney) ou um parâmetro de supressão; não é alterável por cota no DesignModeler' }); return; }
-    rows.push({ param: `P${p++}`, name: ds || k, appKey: k, kind: 'Entrada', unit, source: 'SolidWorks (cota DS_ do esboço Ref)', note: /^pivot_/.test(k) ? 'derivado da corda (escalonamento do pivô)' : '' });
+    rows.push({ param: `P${p++}`, name: ds || k, appKey: k, kind: 'Entrada', unit, source: 'SolidWorks (cota DS_ do esboço Ref)', note: /^pivot_/.test(k) ? 'derivado da corda (escalonamento do pivô)' : /^(Gap|Overlap)_\d+$/.test(k) && inputKeys.includes(`${k}_c`) ? 'derivado: fração × corda (Gap/Overlap em função da corda)' : '' });
   });
   rows.push({ param: `P${p++}`, name: nm.uinf, appKey: 'Uinf', kind: 'Entrada', unit: 'm/s', source: 'Fluent: velocidade do inlet (Use as input parameter)', note: '' });
   reportDefinitions(pkg).forEach((r) => {

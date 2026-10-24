@@ -9,7 +9,7 @@ import { parseNum } from '../../core/num.js';
 export function inputKeysOf(pkg, run) {
   const levels = run?.doe?.levels || {};
   const varied = doeVariables(pkg).filter((v) => String(levels[v.key] || '').trim()).map((v) => v.key);
-  const derived = run?.doe?.pivotScaling !== false ? derivedColumns(pkg).filter((d) => varied.includes(`chord_${d.element}`)).map((d) => d.key) : [];
+  const derived = derivedColumns(pkg).filter((d) => (d.deps ? d.deps.some((k) => varied.includes(k)) : run?.doe?.pivotScaling !== false && varied.includes(`chord_${d.element}`))).map((d) => d.key);
   return [...varied, ...derived, 'Uinf'];
 }
 

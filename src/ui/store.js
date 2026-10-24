@@ -5,6 +5,7 @@
 
 import { migrate, emptyState, logHistory, nowISO } from '../core/model.js';
 import { trimLegacyDemos } from '../core/demo.js';
+import { syncRelativeGaps } from '../core/wing.js';
 
 const DB = 'aero-multielemento', STORE = 'estado', KEY = 'app';
 let state = emptyState();
@@ -89,6 +90,7 @@ export function setActive(patch) {
 export function update(fn, log = null, opts = {}) {
   const ctx = { project: activeProject(), pkg: activePackage(), run: activeRun() };
   fn(state, ctx);
+  syncRelativeGaps(ctx.pkg); // Gap/Overlap em fração da corda → mm
   const now = nowISO();
   if (ctx.pkg) ctx.pkg.updatedAt = now;
   if (ctx.run && opts.touchRun !== false) ctx.run.updatedAt = now;

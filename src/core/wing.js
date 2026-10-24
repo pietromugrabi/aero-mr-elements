@@ -24,7 +24,41 @@ export const keys = {
   chord: (n) => `chord_${n}`, aoa: (n) => `AoA_${n}`, gap: (n) => `Gap_${n}`, overlap: (n) => `Overlap_${n}`,
   off: (n) => `pivot_off_${n}`, dte: (n) => `pivot_dTE_${n}`,
   gon: (n) => `gurney_on_${n}`, gh: (n) => `gurney_h_${n}`, gt: (n) => `gurney_t_${n}`, gpos: (n) => `gurney_pos_${n}`,
+  gapc: (n) => `Gap_${n}_c`, overlapc: (n) => `Overlap_${n}_c`,
 };
+
+/** Gap/Overlap informados como fração de uma corda (Gap_n = Gap_n_c · chord_base) em vez de mm. */
+export const isRelGap = (el) => el?.gapUnit === 'corda';
+
+/** Índice (0-based) do elemento cuja corda é a base de Gap/Overlap relativos: 'ref' (padrão), 'proprio' ou 'principal'. */
+export function gapBaseIndex(pkg, i) {
+  const el = pkg.config.elements[i], tp = topologyOf(pkg);
+  if (el.gapBase === 'proprio') return i;
+  if (el.gapBase === 'principal') return Math.max(0, tp.kinds.indexOf('principal'));
+  return tp.refs[i] ?? 0;
+}
+
+/** Atualiza gap_ref/overlap_ref (mm) dos elementos em modo relativo a partir das frações e de chord_ref. */
+export function syncRelativeGaps(pkg) {
+  const els = pkg?.config?.elements;
+  if (!els?.some(isRelGap)) return;
+  const tp = topologyOf(pkg);
+  els.forEach((el, i) => {
+    if (!isRelGap(el) || tp.kinds[i] === 'principal') return;
+    const c = Number(els[gapBaseIndex(pkg, i)]?.chord_ref);
+    const mm = (f) => (Number.isFinite(Number(f)) && f !== null && c > 0 ? +(Number(f) * c).toPrecision(10) : null);
+    el.gap_ref = mm(el.gapc_ref);
+    el.overlap_ref = mm(el.overlapc_ref);
+  });
+}
+
+/** Gap/Overlap em mm de um elemento relativo, com as cordas das entradas (fração × chord_base). */
+function relGapMM(pkg, i, inp) {
+  const el = pkg.config.elements[i], n = i + 1, b = gapBaseIndex(pkg, i);
+  const num = (k, d) => { const v = Number(inp[k]); return inp[k] != null && Number.isFinite(v) ? v : Number(d); };
+  const c = num(keys.chord(b + 1), pkg.config.elements[b]?.chord_ref);
+  return { gap: num(keys.gapc(n), el.gapc_ref) * c, overlap: num(keys.overlapc(n), el.overlapc_ref) * c };
+}
 
 /** Tipo (principal/flap/slat) e referência de cada elemento do pacote. */
 export function topologyOf(pkg) { return resolveTopology(pkg.config.elements); }
@@ -53,7 +87,13 @@ export function referenceInputs(pkg) {
     const n = i + 1;
     inp[keys.chord(n)] = el.chord_ref;
     inp[keys.aoa(n)] = el.aoa_ref;
-    if (tp.kinds[i] !== 'principal') { inp[keys.gap(n)] = el.gap_ref; inp[keys.overlap(n)] = el.overlap_ref; }
+    if (tp.kinds[i] !== 'principal') {
+      if (isRelGap(el)) {
+        inp[keys.gapc(n)] = el.gapc_ref; inp[keys.overlapc(n)] = el.overlapc_ref;
+        const r = relGapMM(pkg, i, {});
+        inp[keys.gap(n)] = Number.isFinite(r.gap) ? r.gap : null; inp[keys.overlap(n)] = Number.isFinite(r.overlap) ? r.overlap : null;
+      } else { inp[keys.gap(n)] = el.gap_ref; inp[keys.overlap(n)] = el.overlap_ref; }
+    }
     inp[keys.off(n)] = el.pivot_off_ref;
     inp[keys.dte(n)] = el.pivot_dTE_ref;
     if (gurneyConfigured(el)) {
@@ -67,10 +107,18 @@ export function referenceInputs(pkg) {
 
 /**
  * Recalcula os pivôs de um DP a partir da corda (se pivotScaling) sem alterar os valores _ref.
+ * Gap/Overlap em fração da corda são sempre convertidos para mm (Gap_n = Gap_n_c · chord_base).
  * Retorna uma cópia das entradas.
  */
 export function withDerivedPivots(pkg, inputs, pivotScaling = true) {
   const out = { ...inputs };
+  const tp = topologyOf(pkg);
+  pkg.config.elements.forEach((el, i) => {
+    if (!isRelGap(el) || tp.kinds[i] === 'principal') return;
+    const r = relGapMM(pkg, i, out);
+    out[keys.gap(i + 1)] = Number.isFinite(r.gap) ? +r.gap.toPrecision(10) : null;
+    out[keys.overlap(i + 1)] = Number.isFinite(r.overlap) ? +r.overlap.toPrecision(10) : null;
+  });
   pkg.config.elements.forEach((el, i) => {
     const n = i + 1;
     const chord = Number(out[keys.chord(n)] ?? el.chord_ref);
@@ -105,9 +153,10 @@ export function buildWing(pkg, inputs = null) {
     const gurney = on ? { enabled: true, h: num(keys.gh(n), el.gurney.h), t: num(keys.gt(n), el.gurney.t), pos: num(keys.gpos(n), Number(el.gurney.pos) || 0), side: el.gurney.side, hRef: el.gurney.hRef } : null;
     if (el.gurney?.enabled && !gurneyConfigured(el)) errors.push(`Elemento ${n}: Gurney ligado sem altura/espessura.`);
     const isPrincipal = tp.kinds[i] === 'principal';
+    const rel = !isPrincipal && isRelGap(el) && inp[keys.gapc(n)] != null ? relGapMM(pkg, i, inp) : null;
     elems.push({
       label: `Elemento ${n}`, type: tp.kinds[i], ref: tp.refs[i], upAnchor: el.upAnchor || 'bf', chord, aoa: num(keys.aoa(n), el.aoa_ref),
-      gap: isPrincipal ? 0 : num(keys.gap(n), el.gap_ref), overlap: isPrincipal ? 0 : num(keys.overlap(n), el.overlap_ref),
+      gap: isPrincipal ? 0 : rel ? rel.gap : num(keys.gap(n), el.gap_ref), overlap: isPrincipal ? 0 : rel ? rel.overlap : num(keys.overlap(n), el.overlap_ref),
       pivotOff: num(keys.off(n), el.pivot_off_ref), pivotDTE: num(keys.dte(n), el.pivot_dTE_ref),
       local: elementLocal(proc, chord, gurney),
     });

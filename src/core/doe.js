@@ -2,7 +2,7 @@
 // um fator por vez (OAT), duplicatas e pivôs derivados da corda.
 
 import { parseNum } from './num.js';
-import { keys, withDerivedPivots, referenceInputs, topologyOf, pairOf, gurneyConfigured } from './wing.js';
+import { keys, withDerivedPivots, referenceInputs, topologyOf, pairOf, gurneyConfigured, isRelGap, gapBaseIndex } from './wing.js';
 
 export const LIMITS = Object.freeze({ warn: 100, confirm: 1000, max: 20000 });
 
@@ -17,8 +17,14 @@ export function doeVariables(pkg) {
     const pr = pairOf(pkg, n);
     if (pr) {
       const note = `${pr.kind !== 'flap' ? pr.kind + ' ' : ''}par ${pr.a}–${pr.b}${pr.anchor === 'ba' ? ' (Overlap = stagger a partir do BA)' : ''}`;
-      vars.push({ key: keys.gap(n), label: `Gap_${n}`, unit: 'mm', group: g, element: n, ref: el.gap_ref, note });
-      vars.push({ key: keys.overlap(n), label: `Overlap_${n}`, unit: 'mm', group: g, element: n, ref: el.overlap_ref, note });
+      if (isRelGap(el)) {
+        const b = gapBaseIndex(pkg, i) + 1, rn = `${note}; × chord_${b}`;
+        vars.push({ key: keys.gapc(n), label: `Gap_${n}/c`, unit: 'x/c', group: g, element: n, ref: el.gapc_ref, note: rn });
+        vars.push({ key: keys.overlapc(n), label: `Overlap_${n}/c`, unit: 'x/c', group: g, element: n, ref: el.overlapc_ref, note: rn });
+      } else {
+        vars.push({ key: keys.gap(n), label: `Gap_${n}`, unit: 'mm', group: g, element: n, ref: el.gap_ref, note });
+        vars.push({ key: keys.overlap(n), label: `Overlap_${n}`, unit: 'mm', group: g, element: n, ref: el.overlap_ref, note });
+      }
     }
     if (gurneyConfigured(el)) {
       vars.push({ key: keys.gon(n), label: `gurney_on_${n}`, unit: '0/1', group: g, element: n, ref: el.gurney.enabled ? 1 : 0, note: '0 = sem, 1 = com Gurney' });
@@ -34,9 +40,16 @@ export function doeVariables(pkg) {
 /** Colunas derivadas (somente leitura) exibidas na tabela. */
 export function derivedColumns(pkg) {
   const out = [];
-  pkg.config.elements.forEach((_, i) => {
-    out.push({ key: keys.off(i + 1), label: `pivot_off_${i + 1}`, unit: 'mm', group: `Elemento ${i + 1}`, element: i + 1, derived: true });
-    out.push({ key: keys.dte(i + 1), label: `pivot_dTE_${i + 1}`, unit: 'mm', group: `Elemento ${i + 1}`, element: i + 1, derived: true });
+  const tp = topologyOf(pkg);
+  pkg.config.elements.forEach((el, i) => {
+    const n = i + 1, g = `Elemento ${n}`;
+    if (isRelGap(el) && tp.kinds[i] !== 'principal') {
+      const b = gapBaseIndex(pkg, i) + 1;
+      out.push({ key: keys.gap(n), label: `Gap_${n}`, unit: 'mm', group: g, element: n, derived: true, deps: [keys.gapc(n), keys.chord(b)] });
+      out.push({ key: keys.overlap(n), label: `Overlap_${n}`, unit: 'mm', group: g, element: n, derived: true, deps: [keys.overlapc(n), keys.chord(b)] });
+    }
+    out.push({ key: keys.off(n), label: `pivot_off_${n}`, unit: 'mm', group: g, element: n, derived: true, pivot: true });
+    out.push({ key: keys.dte(n), label: `pivot_dTE_${n}`, unit: 'mm', group: g, element: n, derived: true, pivot: true });
   });
   return out;
 }

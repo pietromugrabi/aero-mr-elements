@@ -26,6 +26,8 @@ export function defaultElement(type = 'flap') {
   return {
     type, ref: null, upAnchor: 'bf', profileName: '', datText: '', datFileName: '', inputMode: 'normalizado', alignChord: true,
     chord_ref: null, aoa_ref: null, gap_ref: null, overlap_ref: null, pivot_off_ref: null, pivot_dTE_ref: null,
+    // Gap/Overlap em 'mm' ou em fração da corda ('corda': gapc_ref · chord do elemento base 'ref' | 'proprio' | 'principal')
+    gapUnit: 'mm', gapBase: 'ref', gapc_ref: null, overlapc_ref: null,
     te: { enabled: true, mode: 'pct', value: 0.2, arcPoints: 16 },
     gurney: { enabled: false, h: null, t: null, pos: 0, side: 'pressao', hRef: 'corda' },
   };

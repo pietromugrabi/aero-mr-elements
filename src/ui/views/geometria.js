@@ -4,13 +4,15 @@ import { wingOf, needs, swatch, pageHead } from '../common.js';
 import { geomPlot } from '../plots.js';
 import { setElementCount, syncDependentLists, addSlat, addUpperflap } from '../../core/model.js';
 import { resolveTopology } from '../../core/assembly.js';
-import { pairOf, gurneyConfigured } from '../../core/wing.js';
+import { pairOf, gurneyConfigured, isRelGap, gapBaseIndex } from '../../core/wing.js';
 import { applyReferenceStudy } from '../../core/demo.js';
 import { S1223_DAT, NACA23012_DAT } from '../../core/samples-data.js';
 import { describeTransform, directions, planeAxes, toPlane } from '../../core/transform.js';
 import { pivotLocal } from '../../core/pivots.js';
 import { DEG, rotate } from '../../core/geom.js';
 import { fmt } from '../../core/num.js';
+import { suggestConfig, suggestGeometry, applySuggestion, levelsText, DEFAULT_SUGGEST, RULE_FIELDS } from '../../core/suggest.js';
+import { clone } from '../../core/model.js';
 
 const pt = (p, d = 3) => (p ? `(${fmt(p[0], d)}; ${fmt(p[1], d)})` : '—');
 
@@ -97,6 +99,33 @@ function gurneyBlock(pkg, i, w) {
     h('p', { class: 'muted', style: { margin: '6px 0 0' } }, 'Com h e t definidos, o DOE ganha gurney_on_n (0 = sem, 1 = com), gurney_h_n, gurney_t_n e gurney_pos_n, para comparar com × sem Gurney na mesma rodada.'));
 }
 
+/** Campos de Gap/Overlap: em mm ou em fração da corda de um elemento base (Gap = Gap/c · chord_base). */
+function gapFields(pkg, i, dsOv, gapHint, ovHint) {
+  const el = pkg.config.elements[i], n = i + 1, rel = isRelGap(el);
+  const ovName = dsOv === 'stagger' ? `Stagger_ref_${n} (Overlap_${n})` : `Overlap_ref_${n}`;
+  const b = gapBaseIndex(pkg, i), cb = Number(pkg.config.elements[b]?.chord_ref);
+  const unitSel = selectField({ label: 'Gap / Overlap em', value: rel ? 'corda' : 'mm', options: [['mm', 'mm'], ['corda', 'Fração da corda (x/c)']],
+    onChange: (v) => store.update(() => {
+      if (v === 'corda') {
+        el.gapUnit = 'corda';
+        const c = Number(pkg.config.elements[gapBaseIndex(pkg, i)]?.chord_ref);
+        const f = (mm) => (c > 0 && Number.isFinite(Number(mm)) && mm !== null ? +(Number(mm) / c).toPrecision(6) : null);
+        el.gapc_ref = f(el.gap_ref); el.overlapc_ref = f(el.overlap_ref);
+      } else el.gapUnit = 'mm';
+    }, ['geometria', `${pkg.name} / elemento ${n}`, 'unidade de gap/overlap', v]) });
+  if (!rel) {
+    return [unitSel,
+      numField({ label: `Gap_ref_${n}`, unit: 'mm', value: el.gap_ref, required: true, key: `g${i}`, onChange: (v) => setEl(pkg, i, 'gap_ref', v, `Gap_ref_${n}`), hint: gapHint }),
+      numField({ label: ovName, unit: 'mm', value: el.overlap_ref, required: true, key: `o${i}`, onChange: (v) => setEl(pkg, i, 'overlap_ref', v, `Overlap_ref_${n}`), hint: ovHint })];
+  }
+  const tp = resolveTopology(pkg.config.elements), r = tp.refs[i], p = Math.max(0, tp.kinds.indexOf('principal'));
+  const mmHint = (f, base) => (cb > 0 && Number.isFinite(Number(f)) && f !== null ? `= ${fmt(f * cb, 3)} mm (${fmt(100 * f, 3)} % de chord_${b + 1} = ${fmt(cb, 1)} mm). ${base}` : base);
+  return [unitSel,
+    selectField({ label: 'Corda de referência', value: el.gapBase || 'ref', options: [['ref', `chord_${r + 1} (elemento de referência)`], ['proprio', `chord_${n} (este elemento)`], ['principal', `chord_${p + 1} (principal)`]], onChange: (v) => setEl(pkg, i, 'gapBase', v, 'corda base do gap/overlap') }),
+    numField({ label: `Gap_ref_${n} / chord_${b + 1}`, unit: 'x/c', value: el.gapc_ref, required: true, key: `gc${i}`, onChange: (v) => setEl(pkg, i, 'gapc_ref', v, `Gap_ref_${n}/c`), hint: mmHint(el.gapc_ref, gapHint) }),
+    numField({ label: `${ovName} / chord_${b + 1}`, unit: 'x/c', value: el.overlapc_ref, required: true, key: `oc${i}`, onChange: (v) => setEl(pkg, i, 'overlapc_ref', v, `Overlap_ref_${n}/c`), hint: mmHint(el.overlapc_ref, ovHint) })];
+}
+
 function elementCard(pkg, i, w) {
   const el = pkg.config.elements[i], n = i + 1, proc = w.procs?.[i];
   const tp = resolveTopology(pkg.config.elements), kind = tp.kinds[i];
@@ -127,8 +156,7 @@ function elementCard(pkg, i, w) {
       selectField({ label: 'Coordenadas do .dat', value: el.inputMode, options: [['normalizado', 'Normalizadas (x/c)'], ['físico', 'Físicas (mm)']], onChange: (v) => setEl(pkg, i, 'inputMode', v, 'modo de entrada') }),
       numField({ label: `chord_ref_${n}`, unit: 'mm', value: el.chord_ref, required: true, key: `c${i}`, onChange: (v) => setEl(pkg, i, 'chord_ref', v, `chord_ref_${n}`), hint: el.inputMode === 'físico' && proc?.normalized ? `corda no arquivo: ${fv(proc.normalized.fileChord, 5)} mm` : null }),
       numField({ label: `AoA_ref_${n}`, unit: '°', value: el.aoa_ref, required: true, key: `a${i}`, onChange: (v) => setEl(pkg, i, 'aoa_ref', v, `AoA_ref_${n}`), hint: 'absoluto, em relação ao escoamento' }),
-      pr ? numField({ label: `Gap_ref_${n}`, unit: 'mm', value: el.gap_ref, required: true, key: `g${i}`, onChange: (v) => setEl(pkg, i, 'gap_ref', v, `Gap_ref_${n}`), hint: gapHint }) : null,
-      pr ? numField({ label: dsOv === 'stagger' ? `Stagger_ref_${n} (Overlap_${n})` : `Overlap_ref_${n}`, unit: 'mm', value: el.overlap_ref, required: true, key: `o${i}`, onChange: (v) => setEl(pkg, i, 'overlap_ref', v, `Overlap_ref_${n}`), hint: ovHint }) : null,
+      ...(pr ? gapFields(pkg, i, dsOv, gapHint, ovHint) : []),
       numField({ label: `pivot_off_ref_${n}`, unit: 'mm', value: el.pivot_off_ref, required: true, key: `po${i}`, onChange: (v) => setEl(pkg, i, 'pivot_off_ref', v, `pivot_off_ref_${n}`), hint: 'distância perpendicular à corda' }),
       numField({ label: `pivot_dTE_ref_${n}`, unit: 'mm', value: el.pivot_dTE_ref, required: true, key: `pd${i}`, onChange: (v) => setEl(pkg, i, 'pivot_dTE_ref', v, `pivot_dTE_ref_${n}`), hint: piv?.ok ? `pivô a ${fmt(100 * piv.fractionFromLE, 1)} % da corda a partir do BA` : piv ? piv.error : 'distância pivô–BF' }),
     ),
@@ -210,14 +238,14 @@ function liveControls(pkg, plotBox, measBox, plot) {
   const rows = c.elements.map((el, i) => {
     const n = i + 1;
     const mk = (field, label, min, max, step, unit) => {
-      const v = Number(el[field]);
-      if (!Number.isFinite(v)) return null;
-      const out = h('span', { class: 'tnum', style: { width: '84px', display: 'inline-block', textAlign: 'right' } }, `${fmt(v, 2)} ${unit}`);
+      const v = Number(el[field]), dec = step < 0.01 ? 3 : 2;
+      if (el[field] == null || !Number.isFinite(v)) return null;
+      const out = h('span', { class: 'tnum', style: { width: '84px', display: 'inline-block', textAlign: 'right' } }, `${fmt(v, dec)} ${unit}`);
       const r = h('input', { type: 'range', min, max, step, value: v, style: { flex: 1 } });
       r.addEventListener('input', () => {
         const nv = Number(r.value);
         store.update(() => { el[field] = nv; }, null, { silent: true });
-        out.textContent = `${fmt(nv, 2)} ${unit}`;
+        out.textContent = `${fmt(nv, dec)} ${unit}`;
         const w = wingOf(pkg);
         if (w.plane) { plot.redraw(); measBox.replaceChildren(measurements(pkg, w)); }
       });
@@ -226,8 +254,8 @@ function liveControls(pkg, plotBox, measBox, plot) {
     };
     return h('div', { class: 'el-card' }, h('h3', null, swatch(i), `Elemento ${n}`),
       mk('aoa_ref', `AoA_${n}`, -45, 60, 0.5, '°'),
-      pairOf(pkg, n) ? mk('gap_ref', `Gap_${n}`, 0.1, 25, 0.1, 'mm') : null,
-      pairOf(pkg, n) ? mk('overlap_ref', `Overlap_${n}`, 0.1, 20, 0.1, 'mm') : null,
+      pairOf(pkg, n) ? (isRelGap(el) ? mk('gapc_ref', `Gap_${n}/c`, 0.001, 0.15, 0.001, 'x/c') : mk('gap_ref', `Gap_${n}`, 0.1, 25, 0.1, 'mm')) : null,
+      pairOf(pkg, n) ? (isRelGap(el) ? mk('overlapc_ref', `Overlap_${n}/c`, 0.001, 0.15, 0.001, 'x/c') : mk('overlap_ref', `Overlap_${n}`, 0.1, 20, 0.1, 'mm')) : null,
       mk('chord_ref', `chord_${n}`, 10, 400, 1, 'mm'));
   });
   void plotBox;
@@ -246,6 +274,72 @@ function assemblyTab(pkg, w, ctx) {
   return h('div', null,
     card('Montagem 2D', toggles, h('div', { style: { height: '8px' } }), plot),
     h('div', { class: 'grid g-side' }, card('Ajuste ao vivo', liveControls(pkg, null, meas, plot)), card('Medições e verificações', meas)));
+}
+
+// ------------------------------------------------------------------ Aba Sugestões
+function suggestTab(pkg, ctx) {
+  const s = suggestConfig(pkg), tp = resolveTopology(pkg.config.elements);
+  const setS = (fn, label, v) => store.update(fn, ['geometria', pkg.name, `sugestões: ${label}`, String(v)]);
+  const types = [['flap', 'Flap'], ['slat', 'Slat'], ['upperflap', 'Upperflap']];
+  const ruleTable = h('div', { class: 'table-wrap' }, h('table', null,
+    h('thead', null,
+      h('tr', { class: 'grp' }, h('th', null, ''), types.map(([, l]) => h('th', { colspan: 3 }, l))),
+      h('tr', null, h('th', null, 'Faixa'), types.flatMap(() => ['mín', 'centro', 'máx'].map((t) => h('th', { class: 'num' }, t))))),
+    h('tbody', null, RULE_FIELDS.map(([f, label, unit]) => h('tr', null, h('td', null, h('code', null, label), h('span', { class: 'th-unit' }, ` [${unit}]`)),
+      types.flatMap(([k]) => ['min', 'mid', 'max'].map((m) => h('td', null, numField({ value: s.rules[k][f][m], key: `sg_${k}_${f}_${m}`, onChange: (v) => setS(() => { s.rules[k][f][m] = v; }, `${k} ${f} ${m}`, v) })))))))));
+  const sug = suggestGeometry(pkg);
+  const rng = (r, unit, d = 2) => (!r ? h('span', { class: 'muted' }, '—') : h('span', null, h('strong', null, `${fmt(r.mid, d)}`), r.min != null && r.max != null ? h('small', { class: 'muted' }, ` (${fmt(r.min, d)} a ${fmt(r.max, d)})`) : null, ` ${unit}`));
+  const cur = (v, unit, d = 2) => (v == null || v === '' ? '—' : `${fmt(Number(v), d)} ${unit}`);
+  const run = ctx.run;
+  const toDOE = (i) => {
+    const n = i + 1, o = sug[i], el = pkg.config.elements[i];
+    const lv = {};
+    if (o.aoa?.min != null) lv[`AoA_${n}`] = levelsText(o.aoa);
+    ['gap', 'overlap'].forEach((k) => {
+      if (!o[k] || o[k].min == null) return;
+      const K = k === 'gap' ? 'Gap' : 'Overlap';
+      if (isRelGap(el)) {
+        const cb = Number(pkg.config.elements[gapBaseIndex(pkg, i)]?.chord_ref);
+        if (cb > 0) lv[`${K}_${n}_c`] = levelsText({ min: o[k].min / cb, mid: o[k].mid / cb, max: o[k].max / cb });
+      } else lv[`${K}_${n}`] = levelsText(o[k]);
+    });
+    store.update(() => { Object.assign(run.doe.levels = run.doe.levels || {}, lv); }, ['DOE', run.name, `níveis sugeridos do elemento ${n}`, Object.keys(lv).join(', ')]);
+    toast(`Níveis de ${Object.keys(lv).join(', ')} colocados na rodada "${run.name}" (Inputs / Design Points).`);
+  };
+  const rows = sug.map((o, i) => {
+    const el = pkg.config.elements[i], n = i + 1;
+    return h('tr', null,
+      h('td', null, swatch(i), ` ${n}`), h('td', null, `${o.kind}${o.ref != null ? ` (ref. ${o.ref + 1})` : ''}`),
+      h('td', null, rng(o.chord, 'mm', 1), h('br'), h('small', { class: 'muted' }, `atual: ${cur(el.chord_ref, 'mm', 1)}`)),
+      h('td', null, rng(o.aoa, '°', 1), h('br'), h('small', { class: 'muted' }, `atual: ${cur(el.aoa_ref, '°', 1)}`)),
+      h('td', null, o.kind === 'principal' ? '—' : [rng(o.gap, 'mm'), h('br'), h('small', { class: 'muted' }, `atual: ${cur(el.gap_ref, 'mm')}`)]),
+      h('td', null, o.kind === 'principal' ? '—' : [rng(o.overlap, 'mm'), h('br'), h('small', { class: 'muted' }, `atual: ${cur(el.overlap_ref, 'mm')}`)]),
+      h('td', null, run && o.kind !== 'principal' && (o.aoa?.min != null || o.gap?.min != null) ? h('button', { class: 'small', onclick: () => toDOE(i) }, 'Níveis no DOE') : null));
+  });
+  const allMsgs = sug.flatMap((o, i) => o.msgs.map((m) => ({ level: 'aviso', msg: `Elemento ${i + 1}: ${m}` })));
+  return h('div', null,
+    card('Configuração das sugestões',
+      h('div', { class: 'fields' },
+        numField({ label: 'Corda total disponível (soma das cordas)', unit: 'mm', value: s.totalChord, key: 'sg_tot', onChange: (v) => setS(() => { s.totalChord = v; }, 'corda total', v), hint: 'opcional: divide entre os elementos pelas razões de corda; vazio = parte do chord_ref do principal' }),
+        numField({ label: 'AoA do principal', unit: '°', value: s.mainAoA, key: 'sg_aoa', onChange: (v) => setS(() => { s.mainAoA = v; }, 'AoA do principal', v), hint: 'vazio = usa AoA_ref do principal' })),
+      h('div', { style: { height: '10px' } }), ruleTable,
+      h('div', { class: 'row', style: { marginTop: '10px' } },
+        h('button', { class: 'small', onclick: async () => { if (await confirmBox('Restaurar faixas', 'Voltar todas as faixas para os valores padrão?', 'Restaurar')) setS(() => { pkg.config.suggest = clone(DEFAULT_SUGGEST); }, 'faixas restauradas', 'padrão'); } }, 'Restaurar faixas padrão')),
+      h('p', { class: 'muted', style: { margin: '8px 0 0' } }, 'As faixas são relativas ao elemento de referência de cada elemento (o que está em "Posicionado em relação a"): chord_n = razão × chord_ref, AoA_n = AoA_ref + ΔAoA, Gap/Overlap = fração × chord_ref. Os padrões são faixas típicas de partida para flaps e slats de asas multielemento (literatura de alta sustentação e asas de FSAE), não valores otimizados. O upperflap vem vazio porque não há faixa típica de referência: preencha com os seus dados.')),
+    card('Sugestão por elemento',
+      h('div', { class: 'table-wrap' }, h('table', null,
+        h('thead', null, h('tr', null, ['Elem.', 'Tipo', 'chord', 'AoA', 'Gap', 'Overlap / stagger', ''].map((t) => h('th', null, t)))),
+        h('tbody', null, rows))),
+      allMsgs.length ? msgs(allMsgs) : null,
+      h('div', { class: 'row', style: { marginTop: '10px' } },
+        h('button', { class: 'primary', onclick: async () => {
+          if (!(await confirmBox('Aplicar sugestão', 'Substituir chord_ref, AoA_ref, Gap_ref e Overlap_ref pelos valores centrais sugeridos? Os pivôs são escalados junto com a corda. O histórico registra a alteração, mas não a desfaz automaticamente.', 'Aplicar'))) return;
+          let k = 0;
+          store.update(() => { k = applySuggestion(pkg, suggestGeometry(pkg), { gapBaseIndexOf: (i) => gapBaseIndex(pkg, i) }); }, ['geometria', pkg.name, 'sugestão aplicada', 'valores centrais']);
+          toast(`${k} valor(es) atualizado(s). Confira a montagem e as verificações.`);
+        } }, 'Aplicar valores centrais na geometria'),
+        h('small', { class: 'muted' }, run ? `"Níveis no DOE" coloca mín; centro; máx de AoA, Gap e Overlap do elemento na rodada "${run.name}".` : 'Selecione uma rodada para enviar as faixas como níveis do DOE.')),
+      h('p', { class: 'muted', style: { margin: '8px 0 0' } }, 'Sugestão é ponto de partida: confira a folga real e as interseções na aba Montagem e escolha o melhor valor pelo DOE/CFD.')));
 }
 
 // ------------------------------------------------------------------ Aba Convenções
@@ -291,11 +385,12 @@ export default function geometria(ctx) {
   const pkg = ctx.pkg, ui = ctx.ui;
   ui.tab = ui.tab || 'elementos';
   const w = wingOf(pkg);
-  const tabs = [['elementos', 'Elementos e .dat'], ['bf', 'Bordo de fuga'], ['montagem', 'Montagem'], ['convencoes', 'Convenções e equações']];
+  const tabs = [['elementos', 'Elementos e .dat'], ['bf', 'Bordo de fuga'], ['montagem', 'Montagem'], ['sugestoes', 'Sugestões'], ['convencoes', 'Convenções e equações']];
   let body;
   if (ui.tab === 'elementos') body = [generalCard(pkg), ...pkg.config.elements.map((_, i) => elementCard(pkg, i, w))];
   else if (ui.tab === 'bf') body = pkg.config.elements.map((_, i) => teCard(pkg, i, w));
   else if (ui.tab === 'montagem') body = [assemblyTab(pkg, w, ctx)];
+  else if (ui.tab === 'sugestoes') body = [suggestTab(pkg, ctx)];
   else body = [conventionsTab(pkg)];
   const errs = w.plane ? w.asm.checks.filter((c) => c.level === 'erro').length : w.errors.length;
   return h('div', null,
