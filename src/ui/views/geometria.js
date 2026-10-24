@@ -13,6 +13,7 @@ import { DEG, rotate } from '../../core/geom.js';
 import { fmt } from '../../core/num.js';
 import { suggestConfig, suggestGeometry, applySuggestion, levelsText, DEFAULT_SUGGEST, RULE_FIELDS } from '../../core/suggest.js';
 import { clone } from '../../core/model.js';
+import { conflictVariables, defaultRange, makeGrid, evalCell, summarize, validRuns } from '../../core/conflict.js';
 
 const pt = (p, d = 3) => (p ? `(${fmt(p[0], d)}; ${fmt(p[1], d)})` : '—');
 
@@ -342,6 +343,145 @@ function suggestTab(pkg, ctx) {
       h('p', { class: 'muted', style: { margin: '8px 0 0' } }, 'Sugestão é ponto de partida: confira a folga real e as interseções na aba Montagem e escolha o melhor valor pelo DOE/CFD.')));
 }
 
+// ------------------------------------------------------------------ Aba Mapa de conflito
+const CM_COLORS = { ok: 'var(--ok)', aviso: 'var(--warn)', regra: '#8c8c9c', erro: 'var(--err)' };
+const CM_LABEL = { ok: 'OK', aviso: 'aviso (folga baixa, pivô fora...)', regra: 'regra do DOE (corda/AoA)', erro: 'erro (se atravessam / cota inválida)' };
+
+/** Grava um valor de variável do DOE no _ref correspondente do elemento. */
+function setRefFromKey(pkg, key, v) {
+  const m = key.match(/^(chord|AoA|Gap|Overlap|gurney_h|gurney_t|gurney_pos)_(\d+)(_c)?$/);
+  if (!m) return false;
+  const el = pkg.config.elements[Number(m[2]) - 1];
+  if (!el) return false;
+  const f = { chord: 'chord_ref', AoA: 'aoa_ref', Gap: m[3] ? 'gapc_ref' : 'gap_ref', Overlap: m[3] ? 'overlapc_ref' : 'overlap_ref' }[m[1]];
+  if (f) { el[f] = v; return true; }
+  el.gurney = { ...el.gurney, [m[1].slice(7)]: v };
+  return true;
+}
+
+function conflictTab(pkg, ctx) {
+  const vars = conflictVariables(pkg);
+  if (vars.length < 2) return card('Mapa de conflito', msgs([{ level: 'aviso', msg: 'São necessárias pelo menos 2 variáveis (ex.: Gap_2 e Overlap_2): adicione um flap com valores de referência.' }]));
+  const ui = ctx.ui, byKey = Object.fromEntries(vars.map((v) => [v.key, v]));
+  const firstPair = vars.find((v) => /^Gap_/.test(v.key));
+  const cm = (ui.cm = ui.cm || {});
+  if (!byKey[cm.x]) { cm.x = firstPair?.key || vars[0].key; Object.assign(cm, { xMin: null, xMax: null }); }
+  if (!byKey[cm.y] || cm.y === cm.x) { cm.y = (vars.find((v) => /^Overlap_/.test(v.key) && v.key !== cm.x) || vars.find((v) => v.key !== cm.x)).key; Object.assign(cm, { yMin: null, yMax: null }); }
+  const X = byKey[cm.x], Y = byKey[cm.y];
+  if (cm.xMin == null && cm.xMax == null) Object.assign(cm, { xMin: defaultRange(X).min, xMax: defaultRange(X).max });
+  if (cm.yMin == null && cm.yMax == null) Object.assign(cm, { yMin: defaultRange(Y).min, yMax: defaultRange(Y).max });
+  cm.n = cm.n || 25;
+  const opts = vars.map((v) => [v.key, `${v.label} [${v.unit}] — ${v.group}`]);
+  const progress = h('span', { class: 'muted', dataset: { cmProgress: '1' } }, cm.running ? 'calculando…' : '');
+  const pivotScaling = ctx.run?.doe?.pivotScaling !== false;
+
+  const run = () => {
+    const bad = [cm.xMin, cm.xMax, cm.yMin, cm.yMax].some((v) => v == null || !Number.isFinite(Number(v)));
+    if (bad || !(cm.xMax > cm.xMin) || !(cm.yMax > cm.yMin)) { toast('Informe mín < máx nos dois eixos.', true); return; }
+    const grid = makeGrid(pkg, { x: { key: cm.x, min: cm.xMin, max: cm.xMax }, y: { key: cm.y, min: cm.yMin, max: cm.yMax }, nx: cm.n, ny: cm.n });
+    grid.at = new Date(); grid.labels = { x: X, y: Y };
+    cm.grid = grid; cm.sel = null; cm.running = true;
+    const total = grid.xs.length * grid.ys.length, t0 = performance.now();
+    let k = 0;
+    const step = () => {
+      if (cm.grid !== grid) return; // outro cálculo começou
+      const end = Math.min(total, k + 30);
+      for (; k < end; k++) evalCell(pkg, grid, k % grid.xs.length, Math.floor(k / grid.xs.length), pivotScaling);
+      const pe = document.querySelector('[data-cm-progress]');
+      if (pe) pe.textContent = `calculando… ${Math.round((100 * k) / total)} %`;
+      if (k < total) setTimeout(step, 0);
+      else { cm.running = false; grid.ms = performance.now() - t0; ctx.rerender(); }
+    };
+    ctx.rerender();
+    setTimeout(step, 0);
+  };
+
+  const setup = card('Mapa de conflito — configuração',
+    h('div', { class: 'fields' },
+      selectField({ label: 'Eixo X', value: cm.x, options: opts, onChange: (v) => { Object.assign(cm, { x: v, xMin: null, xMax: null }); ctx.rerender(); } }),
+      numField({ label: `${X.label} mín`, unit: X.unit, value: cm.xMin, key: `cm_xmin_${cm.x}`, onChange: (v) => { cm.xMin = v; } }),
+      numField({ label: `${X.label} máx`, unit: X.unit, value: cm.xMax, key: `cm_xmax_${cm.x}`, onChange: (v) => { cm.xMax = v; } }),
+      selectField({ label: 'Eixo Y', value: cm.y, options: opts.filter(([k]) => k !== cm.x), onChange: (v) => { Object.assign(cm, { y: v, yMin: null, yMax: null }); ctx.rerender(); } }),
+      numField({ label: `${Y.label} mín`, unit: Y.unit, value: cm.yMin, key: `cm_ymin_${cm.y}`, onChange: (v) => { cm.yMin = v; } }),
+      numField({ label: `${Y.label} máx`, unit: Y.unit, value: cm.yMax, key: `cm_ymax_${cm.y}`, onChange: (v) => { cm.yMax = v; } }),
+      selectField({ label: 'Resolução', value: String(cm.n), options: [['15', '15 × 15 (rápido)'], ['25', '25 × 25'], ['40', '40 × 40 (detalhado)']], onChange: (v) => { cm.n = Number(v); } })),
+    h('div', { class: 'row', style: { marginTop: '10px' } },
+      h('button', { class: 'primary', disabled: cm.running || null, onclick: run }, 'Calcular mapa'), progress),
+    h('p', { class: 'muted', style: { margin: '8px 0 0' } }, `Cada ponto da grade monta a asa com os dois valores e as demais variáveis no valor de referência, e verifica interseção entre os contornos, folga real da fenda (mínimo de ${pkg.config.conventions.clearanceMin ?? 1} mm, em Convenções), cotas do SolidWorks e as regras do DOE. É geometria 2D do próprio app, sem ANSYS.`));
+
+  const g = cm.grid;
+  if (!g || g.xKey !== cm.x || g.yKey !== cm.y) return setup;
+  return h('div', null, setup, conflictResult(pkg, ctx, g));
+}
+
+function conflictResult(pkg, ctx, g) {
+  const cm = ctx.ui.cm, X = g.labels.x, Y = g.labels.y;
+  const W = 640, H = 440, m = { l: 64, r: 16, t: 14, b: 50 };
+  const pw = W - m.l - m.r, ph = H - m.t - m.b, nx = g.xs.length, ny = g.ys.length;
+  const cw = pw / nx, ch = ph / ny;
+  const NS = 'http://www.w3.org/2000/svg';
+  const s = (tag, attrs, ...kids) => { const e = document.createElementNS(NS, tag); Object.entries(attrs || {}).forEach(([k, v]) => e.setAttribute(k, v)); kids.forEach((c) => e.append(c)); return e; };
+  const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, width: '100%', style: 'max-width:760px;display:block' });
+  g.cells.forEach((row, j) => row.forEach((c, i) => {
+    const r = s('rect', { x: m.l + i * cw, y: m.t + (ny - 1 - j) * ch, width: cw + 0.5, height: ch + 0.5, fill: c ? CM_COLORS[c.status] : 'transparent', 'fill-opacity': c ? (c.status === 'ok' ? 0.55 : 0.8) : 0, style: 'cursor:pointer' });
+    r.append(s('title', null, `${X.label} = ${fmt(g.xs[i], 3)} ${X.unit}, ${Y.label} = ${fmt(g.ys[j], 3)} ${Y.unit}\n${c ? CM_LABEL[c.status] : 'pendente'}${c?.clearance != null ? `\nfolga mínima: ${fmt(c.clearance, 2)} mm` : ''}${c?.msgs?.length ? `\n${c.msgs[0]}` : ''}`));
+    r.addEventListener('click', () => { cm.sel = { i, j }; ctx.rerender(); });
+    svg.append(r);
+  }));
+  // eixos
+  const ax = 'var(--text-2, #999)';
+  svg.append(s('rect', { x: m.l, y: m.t, width: pw, height: ph, fill: 'none', stroke: ax, 'stroke-opacity': 0.5 }));
+  for (let t = 0; t <= 4; t++) {
+    const fx = t / 4, xv = g.xs[0] + (g.xs[nx - 1] - g.xs[0]) * fx, yv = g.ys[0] + (g.ys[ny - 1] - g.ys[0]) * fx;
+    const px = m.l + cw / 2 + fx * (pw - cw), py = m.t + ph - ch / 2 - fx * (ph - ch);
+    svg.append(s('text', { x: px, y: H - m.b + 16, 'text-anchor': 'middle', 'font-size': 11, fill: ax }, fmt(xv, 3)));
+    svg.append(s('text', { x: m.l - 6, y: py + 4, 'text-anchor': 'end', 'font-size': 11, fill: ax }, fmt(yv, 3)));
+  }
+  svg.append(s('text', { x: m.l + pw / 2, y: H - 10, 'text-anchor': 'middle', 'font-size': 12, fill: ax }, `${X.label} [${X.unit}]`));
+  svg.append(s('text', { x: 14, y: m.t + ph / 2, 'text-anchor': 'middle', 'font-size': 12, fill: ax, transform: `rotate(-90 14 ${m.t + ph / 2})` }, `${Y.label} [${Y.unit}]`));
+  // posição de referência e ponto selecionado
+  const toPx = (xv, yv) => [m.l + cw / 2 + ((xv - g.xs[0]) / (g.xs[nx - 1] - g.xs[0])) * (pw - cw), m.t + ph - ch / 2 - ((yv - g.ys[0]) / (g.ys[ny - 1] - g.ys[0])) * (ph - ch)];
+  const rx = Number(g.base[g.xKey]), ry = Number(g.base[g.yKey]);
+  const inRange = rx >= g.xs[0] && rx <= g.xs[nx - 1] && ry >= g.ys[0] && ry <= g.ys[ny - 1];
+  if (inRange) { const [px, py] = toPx(rx, ry); svg.append(s('circle', { cx: px, cy: py, r: 6, fill: 'none', stroke: 'var(--text, #fff)', 'stroke-width': 2 }, s('title', null, 'valores de referência atuais'))); }
+  if (cm.sel) { const { i, j } = cm.sel; svg.append(s('rect', { x: m.l + i * cw, y: m.t + (ny - 1 - j) * ch, width: cw, height: ch, fill: 'none', stroke: 'var(--text, #fff)', 'stroke-width': 2 })); }
+
+  const cnt = summarize(g), total = nx * ny;
+  const legend = h('div', { class: 'row', style: { marginTop: '8px' } }, ['ok', 'aviso', 'regra', 'erro'].map((k) => h('span', { class: 'row', style: { gap: '6px' } }, h('span', { style: { width: '14px', height: '14px', borderRadius: '3px', display: 'inline-block', background: CM_COLORS[k], opacity: k === 'ok' ? 0.7 : 0.9 } }), `${CM_LABEL[k]}: ${cnt[k]} (${fmt((100 * cnt[k]) / total, 0)} %)`)),
+    inRange ? h('span', { class: 'muted' }, '○ = referência atual') : null);
+
+  // faixas válidas na linha e na coluna mais próximas da referência
+  const near = (arr, v) => arr.reduce((b, x, k) => (Math.abs(x - v) < Math.abs(arr[b] - v) ? k : b), 0);
+  const fr = (runs, unit) => (runs.length ? runs.map((r) => (r.from === r.to ? `${fmt(r.from, 3)}` : `${fmt(r.from, 3)} a ${fmt(r.to, 3)}`)).join(' e ') + ` ${unit}` : 'nenhuma');
+  const jRef = near(g.ys, ry), iRef = near(g.xs, rx);
+  const rowSeq = g.xs.map((v, i) => ({ v, status: g.cells[jRef][i]?.status }));
+  const colSeq = g.ys.map((v, j) => ({ v, status: g.cells[j][iRef]?.status }));
+  const ranges = Number.isFinite(rx) && Number.isFinite(ry) ? h('div', { class: 'kv', style: { marginTop: '10px' } },
+    h('dt', null, `${X.label} sem erro, com ${Y.label} = ${fmt(g.ys[jRef], 3)} ${Y.unit}`), h('dd', null, fr(validRuns(rowSeq), X.unit)),
+    h('dt', null, `${Y.label} sem erro, com ${X.label} = ${fmt(g.xs[iRef], 3)} ${X.unit}`), h('dd', null, fr(validRuns(colSeq), Y.unit)),
+    h('dt', null, '  … e também sem aviso'), h('dd', null, `${X.label}: ${fr(validRuns(rowSeq, ['ok']), X.unit)} · ${Y.label}: ${fr(validRuns(colSeq, ['ok']), Y.unit)}`)) : null;
+
+  let detail = null;
+  if (cm.sel) {
+    const { i, j } = cm.sel, c = g.cells[j][i], xv = g.xs[i], yv = g.ys[j];
+    detail = h('div', { class: 'el-card', style: { marginTop: '10px', marginBottom: 0 } },
+      h('h3', null, `Ponto selecionado: ${X.label} = ${fmt(xv, 4)} ${X.unit}, ${Y.label} = ${fmt(yv, 4)} ${Y.unit}`),
+      c ? h('div', null, badge(CM_LABEL[c.status], c.status === 'ok' ? 'ok' : c.status === 'aviso' ? 'warn' : 'err'), c.clearance != null ? h('span', { class: 'muted' }, ` folga mínima das fendas: ${fmt(c.clearance, 3)} mm`) : null,
+        c.msgs.length ? msgs(c.msgs.slice(0, 6).map((msg) => ({ level: /^regra|folga|pivô/i.test(msg) ? 'aviso' : 'erro', msg }))) : null) : h('span', { class: 'muted' }, 'pendente'),
+      h('div', { class: 'row', style: { marginTop: '8px' } },
+        h('button', { class: 'small', onclick: async () => {
+          if (!(await confirmBox('Usar como referência', `Gravar ${X.label} = ${fmt(xv, 4)} e ${Y.label} = ${fmt(yv, 4)} como valores de referência (_ref) do pacote?`, 'Gravar'))) return;
+          store.update(() => { setRefFromKey(pkg, g.xKey, xv); setRefFromKey(pkg, g.yKey, yv); }, ['geometria', pkg.name, 'referência pelo mapa de conflito', `${X.label}=${xv}; ${Y.label}=${yv}`]);
+          toast('Valores de referência atualizados. O mapa mostra os valores antigos até ser recalculado.');
+        } }, 'Usar estes valores como referência'),
+        h('button', { class: 'small', onclick: () => { ctx.ui.tab = 'montagem'; ctx.rerender(); } }, 'Ver a montagem')));
+  }
+
+  return card(`Mapa: ${X.label} × ${Y.label}`,
+    svg, legend, ranges, detail,
+    h('p', { class: 'muted', style: { margin: '8px 0 0' } }, `${total} pontos calculados em ${fmt((g.ms || 0) / 1000, 1)} s (${g.at.toLocaleTimeString('pt-BR')}). Clique numa célula para ver o motivo; passe o mouse para os valores. Se mudar a geometria, recalcule.`));
+}
+
 // ------------------------------------------------------------------ Aba Convenções
 function conventionsTab(pkg) {
   const cv = pkg.config.conventions;
@@ -385,12 +525,13 @@ export default function geometria(ctx) {
   const pkg = ctx.pkg, ui = ctx.ui;
   ui.tab = ui.tab || 'elementos';
   const w = wingOf(pkg);
-  const tabs = [['elementos', 'Elementos e .dat'], ['bf', 'Bordo de fuga'], ['montagem', 'Montagem'], ['sugestoes', 'Sugestões'], ['convencoes', 'Convenções e equações']];
+  const tabs = [['elementos', 'Elementos e .dat'], ['bf', 'Bordo de fuga'], ['montagem', 'Montagem'], ['conflito', 'Mapa de conflito'], ['sugestoes', 'Sugestões'], ['convencoes', 'Convenções e equações']];
   let body;
   if (ui.tab === 'elementos') body = [generalCard(pkg), ...pkg.config.elements.map((_, i) => elementCard(pkg, i, w))];
   else if (ui.tab === 'bf') body = pkg.config.elements.map((_, i) => teCard(pkg, i, w));
   else if (ui.tab === 'montagem') body = [assemblyTab(pkg, w, ctx)];
   else if (ui.tab === 'sugestoes') body = [suggestTab(pkg, ctx)];
+  else if (ui.tab === 'conflito') body = [conflictTab(pkg, ctx)];
   else body = [conventionsTab(pkg)];
   const errs = w.plane ? w.asm.checks.filter((c) => c.level === 'erro').length : w.errors.length;
   return h('div', null,

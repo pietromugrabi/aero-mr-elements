@@ -119,6 +119,10 @@ Em Geometria, cada elemento escolhe **Gap / Overlap em**: mm ou **fração da co
 
 Em Inputs / Design Points, as combinações em que um flap tem **corda maior** (`chord_n > chord_(n−1)`) ou **AoA menor** (`AoA_n < AoA_(n−1)`) que o seu elemento de referência não são geradas; o app avisa quantas foram descartadas. Ao gerar, o app também monta cada combinação e descarta as com **erro de geometria** (elementos se atravessando, auto-interseção, cota inválida). As três regras podem ser desligadas na mesma tela. Slat e upperflap não entram nas regras de corda/AoA. Na tabela, **Remover DPs com erro** e **Remover DPs com aviso** (ex.: folga da fenda abaixo do mínimo) verificam todos os DPs e removem os do nível escolhido, com confirmação.
 
+## Mapa de conflito
+
+Geometria → aba **Mapa de conflito**. Escolha 2 variáveis (ex.: Gap_2 × Overlap_2 ou AoA_2 × Gap_2), as faixas e a resolução (15, 25 ou 40 pontos por eixo); as demais ficam no valor de referência. O app monta a asa em cada ponto e pinta: verde = OK, amarelo = aviso (folga da fenda abaixo do mínimo, pivô fora do perfil...), cinza = regra do DOE (corda/AoA), vermelho = erro (elementos se atravessando, auto-interseção, cota inválida). Mostra as faixas sem erro na linha e na coluna da referência; clicar numa célula mostra o motivo e permite gravar aqueles valores como referência. Uma grade 25 × 25 leva poucos segundos.
+
 ## Sugestões de chord, AoA, Gap e Overlap
 
 Geometria → aba **Sugestões**. Faixas editáveis por tipo (flap, slat, upperflap), relativas ao elemento de referência: `chord_n = razão · chord_ref`, `AoA_n = AoA_ref + ΔAoA`, `Gap/Overlap = fração · chord_ref`. Opcionalmente, informe a corda total disponível para dividi-la entre os elementos. Os padrões de flap e slat são faixas típicas de partida, não valores otimizados; o upperflap vem vazio. Botões: **Aplicar valores centrais na geometria** (os pivôs escalam com a corda) e **Níveis no DOE** (mín; centro; máx de AoA, Gap e Overlap na rodada ativa).
