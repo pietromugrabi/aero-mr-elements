@@ -24,7 +24,7 @@ export const clone = (o) => JSON.parse(JSON.stringify(o));
 /** type: 'principal' | 'flap' | 'slat'; ref: índice (0-based) do elemento de referência (null = padrão). */
 export function defaultElement(type = 'flap') {
   return {
-    type, ref: null, profileName: '', datText: '', datFileName: '', inputMode: 'normalizado', alignChord: true,
+    type, ref: null, upAnchor: 'bf', profileName: '', datText: '', datFileName: '', inputMode: 'normalizado', alignChord: true,
     chord_ref: null, aoa_ref: null, gap_ref: null, overlap_ref: null, pivot_off_ref: null, pivot_dTE_ref: null,
     te: { enabled: true, mode: 'pct', value: 0.2, arcPoints: 16 },
     gurney: { enabled: false, h: null, t: null, pos: 0, side: 'pressao', hRef: 'corda' },
@@ -86,6 +86,17 @@ export function syncDependentLists(cfg) {
 export function addSlat(cfg) {
   const principal = Math.max(0, cfg.elements.findIndex((e) => e.type === 'principal'));
   const el = defaultElement('slat');
+  el.ref = principal;
+  cfg.elements.push(el);
+  cfg.nElements = cfg.elements.length;
+  syncDependentLists(cfg);
+  return cfg.elements.length - 1;
+}
+
+/** Acrescenta um upperflap (acima do principal; sem valores de referência). */
+export function addUpperflap(cfg) {
+  const principal = Math.max(0, cfg.elements.findIndex((e) => e.type === 'principal'));
+  const el = defaultElement('upperflap');
   el.ref = principal;
   cfg.elements.push(el);
   cfg.nElements = cfg.elements.length;

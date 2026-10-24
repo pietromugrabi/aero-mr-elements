@@ -105,7 +105,15 @@ ZIP/XLSX, relatório Excel com gráficos, slat, Gurney parametrizado e migraçã
 
 - **Tipo de elemento** (Geometria → Elementos): *principal* (ancorado), *flap* (a jusante do elemento de referência) ou *slat* (a montante). *+ Adicionar slat* cria um elemento sem nenhum valor preenchido — o app não inventa valores para o slat. Convenção do slat: `BF_slat = BA_ref + (+Overlap, +Gap)`: Overlap > 0 = BF do slat a jusante do BA do ref; Gap > 0 = lado de sucção. Nomes DS_: `DS_gap{slat}{ref}`, ex.: `DS_gap41`.
 - **Gurney flap** por elemento: ligado/desligado, altura `h` (mm e % da corda), espessura `t`, distância ao BF `pos` (0 = rente ao BF), lado (pressão/sucção) e referência da altura (linha da corda/BF, como `DS_gurney_h`, ou superfície local). Com h e t definidos, o DOE ganha `gurney_on_n` (0/1), `gurney_h_n`, `gurney_t_n` e `gurney_pos_n`, então *com × sem Gurney* cabe numa única rodada (gráficos agrupados por *gurney*). Ligar/desligar não é cota DS_: no SolidWorks use configurações/peças separadas.
-- Para experimentar slat e Gurney, use *+ Adicionar slat* e *+ Definir Gurney flap* em Geometria (o exemplo padrão não traz slat nem Gurney).
+- **Upperflap**: elemento acima do elemento de referência (padrão: o principal), criado com *+ Adicionar upperflap*. Cada upperflap escolhe o ponto de referência:
+  - **pelo BF**: `BA_up = BF_ref + (−Overlap, −Gap)` (Overlap > 0 = BA a montante do BF do ref);
+  - **pelo BA**: `BA_up = BA_ref + (+Stagger, −Gap)` (Stagger, guardado em Overlap_n, > 0 = a jusante do BA do ref).
+  Gap > 0 = acima (lado de pressão na asa invertida). Nomes DS_: `DS_gap{ref}{n}`, `DS_overlap{ref}{n}` ou `DS_stagger{ref}{n}`.
+- Para experimentar slat, upperflap e Gurney, use os botões *+ Adicionar slat*, *+ Adicionar upperflap* e *+ Definir Gurney flap* em Geometria (o exemplo padrão não traz nenhum deles).
+
+## Fonte dos títulos (Longhaul)
+
+Os títulos usam a fonte **Longhaul** quando ela está instalada no computador ou quando o arquivo é colocado em `src/ui/assets/fonts/` (`Longhaul.woff2`, `.woff`, `.otf` ou `.ttf`). Sem ela, o site usa Bahnschrift (Windows). Confira a licença da fonte antes de publicá-la.
 
 ## Relatório Excel de cada rodada
 

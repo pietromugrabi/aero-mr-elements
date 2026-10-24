@@ -6,6 +6,11 @@
 //  - 'flap': a jusante do elemento de referência (padrão: o anterior). BA_flap = BF_ref + (−overlap, −gap).
 //  - 'slat': a montante do elemento de referência (padrão: o principal). BF_slat = BA_ref + (+overlap, +gap).
 //    Overlap > 0: BF do slat a jusante do BA do ref; Gap > 0: BF do slat do lado de sucção do BA do ref.
+//  - 'upperflap': acima do elemento de referência (lado de pressão; padrão: o principal), com o ponto
+//    de referência escolhido por elemento (upAnchor):
+//      'bf' → BA_up = BF_ref + (−overlap, −gap)  (Overlap > 0: BA a montante do BF do ref)
+//      'ba' → BA_up = BA_ref + (+stagger, −gap)  (Stagger = Overlap_n; > 0: BA a jusante do BA do ref)
+//    Gap > 0: lado de pressão (acima, no CAD padrão da asa invertida).
 //
 // Convenções (todas configuráveis em `conv`):
 //  - AoA positivo = nariz para cima no referencial do perfil (aumenta a sustentação no sentido
@@ -29,7 +34,17 @@ export const DEFAULT_CONV = Object.freeze({
   swRules: true, clearanceMin: 1.0,
 });
 
-export const TYPE_LABEL = { principal: 'principal', flap: 'flap', slat: 'slat' };
+export const TYPE_LABEL = { principal: 'principal', flap: 'flap', slat: 'slat', upperflap: 'upperflap' };
+
+/**
+ * Regra de posicionamento de cada tipo: ponto do ref (refPt), ponto do elemento (own) e sinais de
+ * overlap/gap no vetor ref→elemento, nos eixos do escoamento: v = (sx·Overlap, sy·Gap).
+ */
+export function placementRule(kind, upAnchor = 'bf') {
+  if (kind === 'slat') return { refPt: 'le', own: 'te', sx: 1, sy: 1 };
+  if (kind === 'upperflap' && upAnchor === 'ba') return { refPt: 'le', own: 'le', sx: 1, sy: -1 };
+  return { refPt: 'te', own: 'le', sx: -1, sy: -1 }; // flap e upperflap a partir do BF
+}
 
 /**
  * Resolve tipo e referência de cada elemento (com padrões compatíveis com versões antigas:
@@ -44,7 +59,7 @@ export function resolveTopology(list) {
   kinds.forEach((k, i) => { if (k === 'principal' && i !== principal) { errors.push(`Mais de um elemento principal: o elemento ${i + 1} foi tratado como flap.`); kinds[i] = 'flap'; } });
   const refs = list.map((e, i) => {
     if (kinds[i] === 'principal') return null;
-    let r = Number.isInteger(e.ref) ? e.ref : kinds[i] === 'slat' ? principal : i - 1;
+    let r = Number.isInteger(e.ref) ? e.ref : kinds[i] === 'slat' || kinds[i] === 'upperflap' ? principal : i - 1;
     if (r < 0 || r >= n || r === i) { errors.push(`Elemento ${i + 1}: referência inválida; usado o principal.`); r = principal; }
     return r;
   });
@@ -65,18 +80,19 @@ function placeShape(local, chord, piv, theta, translation) {
   return { pts: local.pts.map(tf), le: tf([0, 0]), te: tf([chord, 0]), pivot: tf(piv), tf };
 }
 
-/** Vetor do ponto de referência do ref até o ponto do elemento (flap: BF_ref→BA; slat: BA_ref→BF). */
-function offsetVec(kind, overlap, gap, axes, thetaRef) {
-  const v = kind === 'slat' ? [overlap, gap] : [-overlap, -gap];
+/** Vetor do ponto de referência do ref até o ponto do elemento (ver placementRule). */
+function offsetVec(rule, overlap, gap, axes, thetaRef) {
+  const v = [rule.sx * overlap, rule.sy * gap];
   return axes === 'corda' ? rotate(v, thetaRef) : v;
 }
 
 /** Posiciona o elemento i (já girado) em relação ao ref. */
 function placeRelative(e, kind, piv, theta, ref, conv, gapValue) {
   const rotOnly = placeShape(e.local, e.chord, piv, theta, [0, 0]);
-  const anchorRef = kind === 'slat' ? ref.le : ref.te;
-  const own = kind === 'slat' ? rotOnly.te : rotOnly.le;
-  const target = add(anchorRef, offsetVec(kind, e.overlap, gapValue, conv.gapAxes, ref.theta));
+  const rule = placementRule(kind, e.upAnchor);
+  const anchorRef = ref[rule.refPt];
+  const own = rotOnly[rule.own];
+  const target = add(anchorRef, offsetVec(rule, e.overlap, gapValue, conv.gapAxes, ref.theta));
   return placeShape(e.local, e.chord, piv, theta, sub(target, own));
 }
 
@@ -145,15 +161,15 @@ export function assemble(elems, conv = DEFAULT_CONV) {
   order.forEach((i) => {
     if (refs[i] == null) return;
     const r = refs[i], a = out[r], b = out[i], kind = kinds[i];
-    const d = kind === 'slat' ? sub(b.te, a.le) : sub(b.le, a.te);
+    const rule = placementRule(kind, elems[i].upAnchor);
+    const d = sub(b[rule.own], a[rule.refPt]);
     const dc = rotate(d, -a.theta);
-    const sg = kind === 'slat' ? 1 : -1;
     const md = polygonDistance(a.pts, b.pts);
     slots.push({
-      elem: i, ref: r, kind,
-      pair: kind === 'slat' ? [i + 1, r + 1] : [r + 1, i + 1], // ordem de montante para jusante
-      from: kind === 'slat' ? a.le : a.te, to: kind === 'slat' ? b.te : b.le,
-      overlapFlow: sg * d[0], gapFlow: sg * d[1], overlapChord: sg * dc[0], gapChord: sg * dc[1],
+      elem: i, ref: r, kind, upAnchor: kind === 'upperflap' ? (elems[i].upAnchor || 'bf') : null,
+      pair: kind === 'slat' ? [i + 1, r + 1] : [r + 1, i + 1], // slat: de montante para jusante
+      from: a[rule.refPt], to: b[rule.own],
+      overlapFlow: d[0] / rule.sx, gapFlow: d[1] / rule.sy, overlapChord: dc[0] / rule.sx, gapChord: dc[1] / rule.sy,
       clearance: md.d, pa: md.pa, pb: md.pb,
     });
   });
@@ -190,9 +206,10 @@ function runChecks(elems, out, slots, conv, checks, kinds) {
   }
   slots.forEach((s) => {
     if (s.clearance > 0 && s.clearance < conv.clearanceMin) {
-      checks.push({ level: 'aviso', elem: s.elem, msg: `Folga real da fenda ${s.pair[0]}–${s.pair[1]}${s.kind === 'slat' ? ' (slat)' : ''} = ${s.clearance.toFixed(2)} mm (< ${conv.clearanceMin} mm): exige malha muito fina na fenda.` });
+      checks.push({ level: 'aviso', elem: s.elem, msg: `Folga real da fenda ${s.pair[0]}–${s.pair[1]}${s.kind !== 'flap' ? ` (${s.kind})` : ''} = ${s.clearance.toFixed(2)} mm (< ${conv.clearanceMin} mm): exige malha muito fina na fenda.` });
     }
     if (s.kind === 'slat' && out[s.elem].le[0] > out[s.ref].le[0]) checks.push({ level: 'aviso', elem: s.elem, msg: `Slat (elemento ${s.elem + 1}) com o BA a jusante do BA do elemento ${s.ref + 1}: confira o overlap e a corda.` });
+    if (s.kind === 'upperflap' && s.gapFlow <= 0) checks.push({ level: 'aviso', elem: s.elem, msg: `Upperflap (elemento ${s.elem + 1}) não está acima do ponto de referência do elemento ${s.ref + 1} (Gap ≤ 0).` });
   });
   out.forEach((e, i) => {
     const inside = pointInPolygon(e.pivot, e.pts);

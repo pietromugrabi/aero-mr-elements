@@ -98,6 +98,12 @@ forma que os flaps (folga real, interseção). AoA do slat negativo gera **aviso
 SolidWorks sem sinal), não erro. Nomes DS_: `DS_gap{a}{b}` com o par de montante para jusante
 (flap n com ref r → `DS_gap{r}{n}`; slat n com ref r → `DS_gap{n}{r}`).
 
+**Upperflap** (tipo *upperflap*, referência padrão = principal), acima do ref (Gap > 0 = lado de pressão):
+- pelo BF: `BA_up = BF_ref + (−Overlap, −Gap)`;
+- pelo BA: `BA_up = BA_ref + (+Stagger, −Gap)`, com Stagger guardado em `Overlap_n` (> 0 = a jusante).
+Nos eixos da corda do ref o vetor é girado por `θ_ref`; o gap como folga mínima também vale. Nomes DS_:
+`DS_gap{ref}{n}` e `DS_overlap{ref}{n}` (ou `DS_stagger{ref}{n}` pelo BA).
+
 **Flaps com outra referência:** cada elemento não principal tem um elemento de referência (padrão: o anterior
 para flaps); a ordem de montagem é resolvida pelas dependências, e referências circulares são apontadas.
 

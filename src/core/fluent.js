@@ -67,7 +67,9 @@ export function dsName(key, ctx = 1) {
   if ((m = key.match(/^AoA_(\d+)$/))) return `DS_AoA${m[1]}`;
   if ((m = key.match(/^(Gap|Overlap)_(\d+)$/))) {
     const n = Number(m[2]), pr = pkg ? pairOf(pkg, n) : { a: n - 1, b: n };
-    return pr ? `DS_${m[1].toLowerCase()}${pr.a}${pr.b}` : null;
+    if (!pr) return null;
+    const what = m[1] === 'Overlap' && pr.kind === 'upperflap' && pr.anchor === 'ba' ? 'stagger' : m[1].toLowerCase();
+    return `DS_${what}${pr.a}${pr.b}`;
   }
   if ((m = key.match(/^pivot_off_(\d+)$/))) return `DS_pivot${m[1]}_off`;
   if ((m = key.match(/^pivot_dTE_(\d+)$/))) return `DS_pivot${m[1]}_dTE`;

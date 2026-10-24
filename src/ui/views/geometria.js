@@ -2,7 +2,7 @@ import { h, card, numField, textField, selectField, checkField, msgs, badge, fv,
 import * as store from '../store.js';
 import { wingOf, needs, swatch, pageHead } from '../common.js';
 import { geomPlot } from '../plots.js';
-import { setElementCount, syncDependentLists, addSlat } from '../../core/model.js';
+import { setElementCount, syncDependentLists, addSlat, addUpperflap } from '../../core/model.js';
 import { resolveTopology } from '../../core/assembly.js';
 import { pairOf, gurneyConfigured } from '../../core/wing.js';
 import { applyReferenceStudy } from '../../core/demo.js';
@@ -36,8 +36,9 @@ function generalCard(pkg) {
       h('button', { onclick: async () => { if (await confirmBox('Preencher com o estudo de referência', 'Substitui perfis e cotas de referência dos 3 primeiros elementos pelos valores do estudo de referência (S1223, 140/90/60 mm, 3/18/33°...). Continuar?', 'Preencher')) store.update(() => { if (c.elements.length < 3) setElementCount(c, 3); applyReferenceStudy(pkg, S1223_DAT, 'S1223', { gurneyOn: c.elements.some((e) => e.gurney?.enabled) }); }, ['geometria', pkg.name, 'preenchido com estudo de referência']); } }, 'Preencher com valores do estudo de referência'),
       h('small', { class: 'muted' }, 'Valores de exemplo (cotas DS_ do modelo de referência).'),
       h('span', { class: 'spacer' }),
-      h('button', { onclick: () => store.update(() => { addSlat(c); }, ['geometria', pkg.name, 'slat adicionado', 'sem valores de referência']) }, '+ Adicionar slat')),
-    h('p', { class: 'muted', style: { margin: '8px 0 0' } }, 'Slat = elemento a montante do elemento de referência (padrão: o principal). O app não preenche valores para o slat: informe corda, AoA, gap, overlap, pivô e .dat.'));
+      h('button', { onclick: () => store.update(() => { addSlat(c); }, ['geometria', pkg.name, 'slat adicionado', 'sem valores de referência']) }, '+ Adicionar slat'),
+      h('button', { onclick: () => store.update(() => { addUpperflap(c); }, ['geometria', pkg.name, 'upperflap adicionado', 'sem valores de referência']) }, '+ Adicionar upperflap')),
+    h('p', { class: 'muted', style: { margin: '8px 0 0' } }, 'Slat = a montante do elemento de referência; upperflap = acima dele (pelo BF ou pelo BA). Os dois usam o principal como referência por padrão e vêm sem valores: informe corda, AoA, gap, overlap/stagger, pivô e .dat.'));
 }
 
 function datSummary(proc) {
@@ -103,24 +104,31 @@ function elementCard(pkg, i, w) {
   const loadDat = (text, name) => store.update(() => { el.datText = text; el.datFileName = name; if (!el.profileName) el.profileName = name.replace(/\.\w+$/, ''); }, ['geometria', `${pkg.name} / elemento ${n}`, '.dat importado', name]);
   const piv = Number(el.chord_ref) > 0 && Number(el.pivot_dTE_ref) > 0 ? pivotLocal(Number(el.chord_ref), Number(el.pivot_off_ref), Number(el.pivot_dTE_ref), pkg.config.conventions) : null;
   const refOpts = pkg.config.elements.map((_, j) => [String(j), `Elemento ${j + 1} (${tp.kinds[j]})`]).filter(([j]) => Number(j) !== i);
-  const gapHint = pr ? (pr.kind === 'slat'
+  const dsOv = pr && pr.kind === 'upperflap' && pr.anchor === 'ba' ? 'stagger' : 'overlap';
+  const gapHint = !pr ? '' : pr.kind === 'slat'
     ? `BF do slat → BA do elemento ${pr.b}: Gap > 0 = lado de sucção (DS_gap${pr.a}${pr.b})`
-    : `BF do elemento ${pr.a} → BA deste: Gap > 0 = lado de pressão (DS_gap${pr.a}${pr.b})`) : '';
-  const ovHint = pr ? (pr.kind === 'slat'
+    : pr.kind === 'upperflap'
+      ? `${pr.anchor === 'ba' ? 'BA' : 'BF'} do elemento ${pr.a} → BA deste: Gap > 0 = acima (lado de pressão) (DS_gap${pr.a}${pr.b})`
+      : `BF do elemento ${pr.a} → BA deste: Gap > 0 = lado de pressão (DS_gap${pr.a}${pr.b})`;
+  const ovHint = !pr ? '' : pr.kind === 'slat'
     ? `Overlap > 0 = BF do slat a jusante do BA do ref (DS_overlap${pr.a}${pr.b})`
-    : `Overlap > 0 = BA a montante do BF do ref (DS_overlap${pr.a}${pr.b})`) : '';
+    : pr.kind === 'upperflap' && pr.anchor === 'ba'
+      ? `Stagger: > 0 = BA deste a jusante do BA do ref (DS_stagger${pr.a}${pr.b})`
+      : `Overlap > 0 = BA a montante do BF do ref (DS_overlap${pr.a}${pr.b})`;
+  const removable = kind === 'slat' || kind === 'upperflap';
   return h('div', { class: 'el-card' },
-    h('h3', null, swatch(i), `Elemento ${n}`, ' ', badge(kind, kind === 'slat' ? 'info' : kind === 'principal' ? 'ok' : ''), el.profileName ? h('span', { class: 'muted' }, ` — ${el.profileName}`) : null,
-      kind === 'slat' ? h('span', { style: { marginLeft: 'auto' } }, h('button', { class: 'small danger', onclick: async () => { if (await confirmBox('Remover slat', `Remover o elemento ${n} (slat)? Elementos que o usam como referência passam a usar o principal.`, 'Remover', true)) store.update(() => { pkg.config.elements.splice(i, 1); pkg.config.elements.forEach((e) => { if (Number.isInteger(e.ref)) e.ref = e.ref === i ? null : e.ref > i ? e.ref - 1 : e.ref; }); pkg.config.nElements = pkg.config.elements.length; syncDependentLists(pkg.config); }, ['geometria', pkg.name, `slat (elemento ${n}) removido`]); } }, 'Remover slat')) : null),
+    h('h3', null, swatch(i), `Elemento ${n}`, ' ', badge(kind, kind === 'slat' || kind === 'upperflap' ? 'info' : kind === 'principal' ? 'ok' : ''), el.profileName ? h('span', { class: 'muted' }, ` — ${el.profileName}`) : null,
+      removable ? h('span', { style: { marginLeft: 'auto' } }, h('button', { class: 'small danger', onclick: async () => { if (await confirmBox(`Remover ${kind}`, `Remover o elemento ${n} (${kind})? Elementos que o usam como referência passam a usar o principal.`, 'Remover', true)) store.update(() => { pkg.config.elements.splice(i, 1); pkg.config.elements.forEach((e) => { if (Number.isInteger(e.ref)) e.ref = e.ref === i ? null : e.ref > i ? e.ref - 1 : e.ref; }); pkg.config.nElements = pkg.config.elements.length; syncDependentLists(pkg.config); }, ['geometria', pkg.name, `${kind} (elemento ${n}) removido`]); } }, `Remover ${kind}`)) : null),
     h('div', { class: 'fields' },
-      selectField({ label: 'Tipo de elemento', value: kind, options: [['principal', 'Principal (ancorado)'], ['flap', 'Flap (a jusante do ref)'], ['slat', 'Slat (a montante do ref)']], onChange: (v) => store.update(() => { if (v === 'principal') pkg.config.elements.forEach((e, j) => { if (j !== i && e.type === 'principal') e.type = 'flap'; }); el.type = v; el.ref = null; syncDependentLists(pkg.config); }, ['geometria', `${pkg.name} / elemento ${n}`, 'tipo', v]) }),
+      selectField({ label: 'Tipo de elemento', value: kind, options: [['principal', 'Principal (ancorado)'], ['flap', 'Flap (a jusante do ref)'], ['slat', 'Slat (a montante do ref)'], ['upperflap', 'Upperflap (acima do ref)']], onChange: (v) => store.update(() => { if (v === 'principal') pkg.config.elements.forEach((e, j) => { if (j !== i && e.type === 'principal') e.type = 'flap'; }); el.type = v; el.ref = null; syncDependentLists(pkg.config); }, ['geometria', `${pkg.name} / elemento ${n}`, 'tipo', v]) }),
       kind !== 'principal' ? selectField({ label: 'Posicionado em relação a', value: String(tp.refs[i]), options: refOpts, onChange: (v) => setEl(pkg, i, 'ref', Number(v), 'referência') }) : null,
+      kind === 'upperflap' ? selectField({ label: 'Ponto de referência do upperflap', value: el.upAnchor === 'ba' ? 'ba' : 'bf', options: [['bf', 'BF do elemento de referência (Gap + Overlap)'], ['ba', 'BA do elemento de referência (Gap + Stagger)']], onChange: (v) => setEl(pkg, i, 'upAnchor', v, 'referência do upperflap') }) : null,
       textField({ label: 'Nome do perfil', value: el.profileName, key: `pn${i}`, onChange: (v) => setEl(pkg, i, 'profileName', v, 'nome do perfil') }),
       selectField({ label: 'Coordenadas do .dat', value: el.inputMode, options: [['normalizado', 'Normalizadas (x/c)'], ['físico', 'Físicas (mm)']], onChange: (v) => setEl(pkg, i, 'inputMode', v, 'modo de entrada') }),
       numField({ label: `chord_ref_${n}`, unit: 'mm', value: el.chord_ref, required: true, key: `c${i}`, onChange: (v) => setEl(pkg, i, 'chord_ref', v, `chord_ref_${n}`), hint: el.inputMode === 'físico' && proc?.normalized ? `corda no arquivo: ${fv(proc.normalized.fileChord, 5)} mm` : null }),
       numField({ label: `AoA_ref_${n}`, unit: '°', value: el.aoa_ref, required: true, key: `a${i}`, onChange: (v) => setEl(pkg, i, 'aoa_ref', v, `AoA_ref_${n}`), hint: 'absoluto, em relação ao escoamento' }),
       pr ? numField({ label: `Gap_ref_${n}`, unit: 'mm', value: el.gap_ref, required: true, key: `g${i}`, onChange: (v) => setEl(pkg, i, 'gap_ref', v, `Gap_ref_${n}`), hint: gapHint }) : null,
-      pr ? numField({ label: `Overlap_ref_${n}`, unit: 'mm', value: el.overlap_ref, required: true, key: `o${i}`, onChange: (v) => setEl(pkg, i, 'overlap_ref', v, `Overlap_ref_${n}`), hint: ovHint }) : null,
+      pr ? numField({ label: dsOv === 'stagger' ? `Stagger_ref_${n} (Overlap_${n})` : `Overlap_ref_${n}`, unit: 'mm', value: el.overlap_ref, required: true, key: `o${i}`, onChange: (v) => setEl(pkg, i, 'overlap_ref', v, `Overlap_ref_${n}`), hint: ovHint }) : null,
       numField({ label: `pivot_off_ref_${n}`, unit: 'mm', value: el.pivot_off_ref, required: true, key: `po${i}`, onChange: (v) => setEl(pkg, i, 'pivot_off_ref', v, `pivot_off_ref_${n}`), hint: 'distância perpendicular à corda' }),
       numField({ label: `pivot_dTE_ref_${n}`, unit: 'mm', value: el.pivot_dTE_ref, required: true, key: `pd${i}`, onChange: (v) => setEl(pkg, i, 'pivot_dTE_ref', v, `pivot_dTE_ref_${n}`), hint: piv?.ok ? `pivô a ${fmt(100 * piv.fractionFromLE, 1)} % da corda a partir do BA` : piv ? piv.error : 'distância pivô–BF' }),
     ),

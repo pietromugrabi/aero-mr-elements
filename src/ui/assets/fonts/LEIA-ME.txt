@@ -1,0 +1,3 @@
+﻿Coloque aqui o arquivo da fonte Longhaul com um destes nomes: Longhaul.woff2, Longhaul.woff, Longhaul.otf ou Longhaul.ttf.
+Os títulos do site passam a usá-la automaticamente. Sem o arquivo (e sem a fonte instalada no computador), o site usa Bahnschrift.
+Confira a licença da fonte antes de publicá-la no GitHub.

@@ -68,7 +68,7 @@ function summarySheet(project, pkg, run, opts) {
   rows.push(sec('Convenções de montagem'));
   const cv = c.conventions;
   [['Modo', cv.assemblyMode === 'pivoFixo' ? 'pivô fixo' : 'sequencial (SolidWorks DS_)'], ['Gap/overlap', `${cv.gapDef === 'minimo' ? 'gap = folga mínima' : 'ponto a ponto'}, eixos ${cv.gapAxes === 'corda' ? 'da corda do ref' : 'do escoamento'}`],
-    ['Flap', 'BA_flap = BF_ref + (−Overlap, −Gap)'], ['Slat', 'BF_slat = BA_ref + (+Overlap, +Gap)'], ['Pivô', `pivot_dTE ${cv.pivotDTE === 'corda' ? 'ao longo da corda' : 'euclidiano pivô–BF'}, lado ${cv.pivotSide === 'pressao' ? 'pressão' : 'sucção'}`],
+    ['Flap', 'BA_flap = BF_ref + (−Overlap, −Gap)'], ['Slat', 'BF_slat = BA_ref + (+Overlap, +Gap)'], ['Upperflap', 'BA_up = BF_ref + (−Overlap, −Gap) ou BA_ref + (+Stagger, −Gap); Gap > 0 = acima (pressão)'], ['Pivô', `pivot_dTE ${cv.pivotDTE === 'corda' ? 'ao longo da corda' : 'euclidiano pivô–BF'}, lado ${cv.pivotSide === 'pressao' ? 'pressão' : 'sucção'}`],
     ['Corda', cv.chordDef === 'geometrica' ? 'geométrica (BA → extremo do BF arredondado)' : 'clássica'], ['Pivôs no DOE', run.doe?.pivotScaling !== false ? 'escalados com a corda' : 'fixos (valores de referência)']].forEach(([k, v]) => rows.push([{ v: k, s: XS.header }, v]));
   if (w.plane) {
     const dom = computeDomain(w.bbox, w.plane.map((e) => e.chord), c.domain, c.transform.sx);

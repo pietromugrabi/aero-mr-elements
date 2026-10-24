@@ -1,3 +1,13 @@
+/* Fonte de títulos: Longhaul. Usada se estiver instalada no computador ou se o arquivo for colocado
+   em src/ui/assets/fonts/ (Longhaul.woff2, .woff, .otf ou .ttf). Sem ela, cai para Bahnschrift
+   (Windows) e depois para fontes do sistema. */
+@font-face {
+  font-family: "Longhaul";
+  src: local("Longhaul"), local("Longhaul Regular"),
+       url("assets/fonts/Longhaul.woff2") format("woff2"), url("assets/fonts/Longhaul.woff") format("woff"),
+       url("assets/fonts/Longhaul.otf") format("opentype"), url("assets/fonts/Longhaul.ttf") format("truetype");
+  font-display: swap;
+}
 /* Identidade visual Mauá Racing: preto, vermelho e branco. Tema escuro é o padrão. */
 :root {
   color-scheme: dark;
@@ -221,3 +231,102 @@ th { text-transform: none; }
 .hero p { color: #cfcfcf; max-width: 640px; padding: 0; }
 .hero .swoosh { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
 @media (max-width: 600px) { .hero img { height: 70px; } .hero h1 { font-size: 21px; } }
+/* ===================== Polimento visual (racing) ===================== */
+:root {
+  --display-font: "Longhaul", "Bahnschrift", "DIN Alternate", "Arial Narrow", system-ui, sans-serif;
+  --radius: 10px;
+  --card-bg: linear-gradient(180deg, #161616 0%, #101010 100%);
+  --card-border: #262626;
+  --field-bg: #0b0b0b;
+  --page-texture: repeating-linear-gradient(135deg, rgba(255,255,255,.018) 0 2px, transparent 2px 7px);
+  --glow: 0 0 0 1px rgba(225, 6, 0, .35), 0 6px 24px rgba(225, 6, 0, .18);
+}
+:root[data-theme="light"] {
+  --card-bg: #ffffff;
+  --card-border: #e2e2e2;
+  --field-bg: #ffffff;
+  --page-texture: repeating-linear-gradient(135deg, rgba(0,0,0,.025) 0 2px, transparent 2px 7px);
+  --glow: 0 0 0 1px rgba(200, 5, 0, .25), 0 6px 18px rgba(200, 5, 0, .10);
+}
+body { background: radial-gradient(1200px 500px at 100% -10%, rgba(225, 6, 0, .10), transparent 60%), var(--page-texture), var(--bg); background-attachment: fixed; }
+
+/* Títulos na fonte de display */
+h1, .page-head h1, .hero h1, .brand-name, .card > h2:first-child, .nav .grp, .stat, .tabs button, .el-card h3, .modal h2 {
+  font-family: var(--display-font);
+}
+h1, .page-head h1 { font-weight: 700; letter-spacing: 1.2px; }
+.page-head { margin-bottom: 18px; padding-bottom: 12px; border-bottom: 1px solid var(--border); position: relative; }
+.page-head::after { content: ""; position: absolute; left: 0; bottom: -1px; width: 120px; height: 2px; background: linear-gradient(90deg, var(--accent), transparent); }
+.page-head h1 { font-size: 24px; border-left-width: 5px; }
+.hero h1 { font-size: 32px; letter-spacing: 3px; }
+.brand-name { letter-spacing: 1.6px; }
+.card > h2:first-child { font-size: 15px; text-transform: uppercase; letter-spacing: 1.2px; }
+.nav .grp { letter-spacing: 2.4px; font-size: 11px; }
+
+/* Cartões */
+.card, .el-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: var(--radius); box-shadow: var(--shadow); transition: border-color .15s, box-shadow .15s; }
+.card:hover { border-color: color-mix(in srgb, var(--accent) 35%, var(--card-border)); }
+.card { padding: 16px 18px; }
+.el-card { padding: 14px 16px; }
+.el-card h3 { font-size: 15px; letter-spacing: 1px; text-transform: uppercase; }
+
+/* Indicadores (Dashboard) */
+.stat { font-size: 34px; font-weight: 700; line-height: 1.05; color: var(--text); letter-spacing: .5px; }
+.stat-label { text-transform: uppercase; letter-spacing: 1.2px; font-size: 11px; margin-top: 6px; color: var(--muted); }
+.grid.g4 > .card { position: relative; overflow: hidden; }
+.grid.g4 > .card::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: linear-gradient(90deg, var(--accent), transparent 80%); }
+
+/* Menu lateral com ícones */
+.nav a { margin: 1px 8px; border-radius: 8px; border-left: 0; padding: 8px 12px; position: relative; }
+.nav a .ico { width: 18px; height: 18px; flex: none; opacity: .75; }
+.nav a.active { background: linear-gradient(90deg, rgba(225, 6, 0, .30), rgba(225, 6, 0, .06)); box-shadow: inset 3px 0 0 var(--accent); }
+.nav a.active .ico { opacity: 1; color: #fff; }
+.nav a .num { display: none; }
+
+/* Botões */
+button, .btn { border-radius: 8px; font-weight: 550; transition: background .12s, border-color .12s, box-shadow .12s, transform .05s; }
+button:active:not(:disabled) { transform: translateY(1px); }
+button.primary { background: linear-gradient(180deg, #ff1f14, #c40500); border-color: #c40500; box-shadow: 0 2px 10px rgba(225, 6, 0, .30); font-weight: 650; letter-spacing: .2px; }
+button.primary:hover { background: linear-gradient(180deg, #ff3a2f, #d40600); box-shadow: var(--glow); }
+button:focus-visible, .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Campos */
+.inp, input[type=text], input[type=number], select, textarea { background: var(--field-bg); border-radius: 7px; }
+.inp { transition: border-color .12s, box-shadow .12s; }
+.inp:focus-within { box-shadow: 0 0 0 3px rgba(225, 6, 0, .22); }
+.inp .unit { font-weight: 600; letter-spacing: .3px; }
+
+/* Abas e segmentos */
+.tabs { gap: 6px; border-bottom: 0; background: var(--surface); border: 1px solid var(--card-border); border-radius: 10px; padding: 4px; display: inline-flex; }
+.tabs button { border: 0; border-radius: 7px; padding: 7px 14px; font-size: 13px; letter-spacing: .8px; text-transform: uppercase; }
+.tabs button.on { background: linear-gradient(180deg, #ff1f14, #c40500); color: #fff; box-shadow: 0 2px 10px rgba(225, 6, 0, .30); }
+.seg { border-radius: 8px; }
+
+/* Tabelas */
+.table-wrap { border-radius: 10px; border-color: var(--card-border); }
+th { background: #181818; text-transform: uppercase; font-size: 11px; letter-spacing: .8px; color: #bdbdbd; border-bottom: 2px solid var(--accent); }
+:root[data-theme="light"] th { background: #f4f4f4; color: #444; }
+tbody tr:nth-child(even) td { background: rgba(255, 255, 255, .018); }
+:root[data-theme="light"] tbody tr:nth-child(even) td { background: rgba(0, 0, 0, .02); }
+tr:hover td { background: rgba(225, 6, 0, .08) !important; }
+
+/* Selos, mensagens e gráficos */
+.badge { border-radius: 999px; padding: 2px 9px; letter-spacing: .2px; }
+.msgs li { border-radius: 8px; border-left: 3px solid transparent; }
+.msgs li.erro { border-left-color: var(--err); } .msgs li.aviso { border-left-color: var(--warn); }
+.msgs li.ok { border-left-color: var(--ok); } .msgs li.info { border-left-color: var(--accent); }
+.plot { border-radius: 10px; border-color: var(--card-border); }
+.banner { border-radius: 10px; }
+.hero { border-radius: 14px; box-shadow: 0 10px 40px rgba(0, 0, 0, .45); }
+
+/* Barras de rolagem escuras */
+* { scrollbar-width: thin; scrollbar-color: #3a3a3a transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #2f2f2f; border-radius: 10px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: #e10600; background-clip: content-box; }
+
+/* Entrada suave das telas */
+.main > div { animation: aeroIn .22s ease-out; }
+@keyframes aeroIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .main > div { animation: none; } * { transition: none !important; } }
+@media (max-width: 900px) { .tabs { display: flex; } .nav a { margin: 1px 6px; } }

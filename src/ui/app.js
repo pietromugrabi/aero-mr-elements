@@ -30,6 +30,23 @@ const SECTIONS = [
   { id: 'exportacao', label: 'Exportação', view: exportacao, n: 10 },
 ];
 
+
+/** Ícones de linha (24×24, stroke = currentColor) para o menu lateral. */
+const ICONS = {
+  dashboard: '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
+  projetos: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  geometria: '<path d="M2 14c4-6 12-8 20-5-7 0-13 2-20 5z"/><path d="M12 18c3-3 7-4 10-3-4 .5-7 1.5-10 3z"/>',
+  dominio: '<rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M8 13c2-2 5-3 8-2"/>',
+  malha: '<path d="M3 3h18v18H3zM3 9h18M3 15h18M9 3v18M15 3v18"/>',
+  named: '<path d="M4 7h10l6 5-6 5H4z"/><circle cx="8" cy="12" r="1.2"/>',
+  fluent: '<path d="M3 8c3-2 6 2 9 0s6-2 9 0M3 13c3-2 6 2 9 0s6-2 9 0M3 18c3-2 6 2 9 0s6-2 9 0"/>',
+  inputs: '<rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 9h18M9 9v11M15 9v11"/>',
+  outputs: '<path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/>',
+  graficos: '<path d="M4 20V4M4 20h16"/><path d="M7 15l4-5 3 3 5-7"/>',
+  comparacao: '<path d="M7 4v16M17 4v16"/><path d="M3 9h8M13 15h8"/>',
+  exportacao: '<path d="M12 15V3M7 8l5-5 5 5"/><path d="M4 14v6h16v-6"/>',
+};
+const icon = (id) => h('span', { class: 'ico', html: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[id] || ''}</svg>` });
 const root = document.getElementById('app');
 let route = (location.hash || '#dashboard').slice(1).split('?')[0];
 const viewState = {}; // estado de interface por tela (abas, filtros) — não persistido
@@ -72,7 +89,7 @@ function sidebar() {
   const items = [];
   SECTIONS.forEach((sct) => {
     if (sct.grp) items.push(h('div', { class: 'grp' }, sct.grp));
-    items.push(h('a', { href: `#${sct.id}`, class: route === sct.id ? 'active' : '', onclick: () => root.firstChild.classList.remove('nav-open') }, h('span', { class: 'num' }, sct.n ?? ''), sct.label));
+    items.push(h('a', { href: `#${sct.id}`, class: route === sct.id ? 'active' : '', onclick: () => root.firstChild.classList.remove('nav-open') }, icon(sct.id), h('span', { class: 'num' }, sct.n ?? ''), sct.label));
   });
   return h('nav', { class: 'sidebar' }, h('div', { class: 'nav' }, items),
     h('div', { class: 'about' }, h('strong', { style: { color: '#fff', letterSpacing: '1px' } }, 'AERO MULT-MR ELEMENTS'), h('br'), 'Prepara, organiza e analisa estudos SolidWorks + ANSYS Workbench/Fluent. Não executa CAD, malha nem CFD.'));

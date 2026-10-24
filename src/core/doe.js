@@ -16,7 +16,7 @@ export function doeVariables(pkg) {
     vars.push({ key: keys.aoa(n), label: `AoA_${n}`, unit: '°', group: g, element: n, ref: el.aoa_ref });
     const pr = pairOf(pkg, n);
     if (pr) {
-      const note = `${pr.kind === 'slat' ? 'slat ' : ''}par ${pr.a}–${pr.b}`;
+      const note = `${pr.kind !== 'flap' ? pr.kind + ' ' : ''}par ${pr.a}–${pr.b}${pr.anchor === 'ba' ? ' (Overlap = stagger a partir do BA)' : ''}`;
       vars.push({ key: keys.gap(n), label: `Gap_${n}`, unit: 'mm', group: g, element: n, ref: el.gap_ref, note });
       vars.push({ key: keys.overlap(n), label: `Overlap_${n}`, unit: 'mm', group: g, element: n, ref: el.overlap_ref, note });
     }

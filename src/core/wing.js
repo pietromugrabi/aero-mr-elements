@@ -37,7 +37,9 @@ export function pairOf(pkg, n) {
   const tp = topologyOf(pkg), i = n - 1;
   if (tp.kinds[i] === 'principal') return null;
   const r = tp.refs[i] + 1;
-  return tp.kinds[i] === 'slat' ? { kind: 'slat', a: n, b: r } : { kind: 'flap', a: r, b: n };
+  if (tp.kinds[i] === 'slat') return { kind: 'slat', a: n, b: r };
+  if (tp.kinds[i] === 'upperflap') return { kind: 'upperflap', a: r, b: n, anchor: pkg.config.elements[i].upAnchor === 'ba' ? 'ba' : 'bf' };
+  return { kind: 'flap', a: r, b: n };
 }
 
 /** Gurney com geometria definida (h e t > 0): pode ser ligado/desligado por DP. */
@@ -104,7 +106,7 @@ export function buildWing(pkg, inputs = null) {
     if (el.gurney?.enabled && !gurneyConfigured(el)) errors.push(`Elemento ${n}: Gurney ligado sem altura/espessura.`);
     const isPrincipal = tp.kinds[i] === 'principal';
     elems.push({
-      label: `Elemento ${n}`, type: tp.kinds[i], ref: tp.refs[i], chord, aoa: num(keys.aoa(n), el.aoa_ref),
+      label: `Elemento ${n}`, type: tp.kinds[i], ref: tp.refs[i], upAnchor: el.upAnchor || 'bf', chord, aoa: num(keys.aoa(n), el.aoa_ref),
       gap: isPrincipal ? 0 : num(keys.gap(n), el.gap_ref), overlap: isPrincipal ? 0 : num(keys.overlap(n), el.overlap_ref),
       pivotOff: num(keys.off(n), el.pivot_off_ref), pivotDTE: num(keys.dte(n), el.pivot_dTE_ref),
       local: elementLocal(proc, chord, gurney),
