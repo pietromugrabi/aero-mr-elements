@@ -213,117 +213,108 @@ details > summary { cursor: pointer; font-weight: 600; margin: 4px 0; }
 .kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; font-size: 13px; }
 .kv dt { color: var(--text-2); } .kv dd { margin: 0; font-variant-numeric: tabular-nums; }
 .noprint {}
-/* Acabamento Mauá Racing */
-.page-head h1 { padding-left: 12px; border-left: 4px solid var(--accent); text-transform: uppercase; }
-.page-head p { padding-left: 16px; }
-.card > h2:first-child { display: flex; align-items: center; gap: 8px; }
-.card > h2:first-child::before { content: ""; width: 4px; height: 15px; background: var(--accent); border-radius: 1px; flex: none; }
-.card { border-top: 1px solid var(--border); }
-th { text-transform: none; }
-.hero { position: relative; overflow: hidden; background: #000; color: #fff; border-radius: var(--radius); padding: 22px 26px; margin-bottom: 16px; border-bottom: 3px solid var(--accent); display: flex; gap: 24px; align-items: center; flex-wrap: wrap; }
-.hero img { height: 110px; width: auto; position: relative; z-index: 1; }
-.hero .hero-text { position: relative; z-index: 1; min-width: 0; }
-.hero h1 { color: #fff; border: 0; padding: 0; font-size: 28px; letter-spacing: 2px; }
-.hero h1 .mr { color: var(--accent-hover); font-style: italic; }
-.hero p { color: #cfcfcf; max-width: 640px; padding: 0; }
-.hero .swoosh { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
-@media (max-width: 600px) { .hero img { height: 70px; } .hero h1 { font-size: 21px; } }
-/* ===================== Polimento visual (racing) ===================== */
+/* ===================== Identidade: folha de engenharia Mauá Racing =====================
+   Uma ideia forte: o cabeçalho de cada tela é o carimbo de um desenho técnico (título +
+   projeto / pacote / rodada / situação). O resto é quieto: sem degradês, brilhos, texturas,
+   caixa alta ou animação de entrada; cantos retos de prancheta; tipografia DIN (Bahnschrift)
+   para o texto e Longhaul só nos títulos e na marca. */
 :root {
-  --display-font: "Longhaul", "Bahnschrift", "DIN Alternate", "Arial Narrow", system-ui, sans-serif;
-  --radius: 10px;
-  --card-bg: linear-gradient(180deg, #161616 0%, #101010 100%);
-  --card-border: #262626;
-  --field-bg: #0b0b0b;
-  --page-texture: repeating-linear-gradient(135deg, rgba(255,255,255,.018) 0 2px, transparent 2px 7px);
-  --glow: 0 0 0 1px rgba(225, 6, 0, .35), 0 6px 24px rgba(225, 6, 0, .18);
+  --display-font: "Longhaul", "Bahnschrift", "Arial Narrow", sans-serif;
+  --font: "Bahnschrift", "DIN Alternate", "DIN 2014", "Segoe UI", system-ui, sans-serif;
+  --radius: 2px;
+  --bg: #000000;             /* o preto da pintura do carro */
+  --surface: #151515; --surface-2: #1f1f1f; --border: #2c2c2c; --border-strong: #4a4a4a;
+  --field-bg: #000000;
+  --shadow: none;
 }
-:root[data-theme="light"] {
-  --card-bg: #ffffff;
-  --card-border: #e2e2e2;
-  --field-bg: #ffffff;
-  --page-texture: repeating-linear-gradient(135deg, rgba(0,0,0,.025) 0 2px, transparent 2px 7px);
-  --glow: 0 0 0 1px rgba(200, 5, 0, .25), 0 6px 18px rgba(200, 5, 0, .10);
+:root[data-theme="light"] { --field-bg: #ffffff; --bg: #ffffff; --surface: #ffffff; --surface-2: #f2f2f2; --border: #dadada; --border-strong: #9e9e9e; }
+body { font: 14px/1.5 var(--font); background: var(--bg); letter-spacing: .005em; }
+h1 { font-family: var(--display-font); }
+h2, h3 { font-family: var(--font); letter-spacing: 0; text-transform: none; }
+
+/* Carimbo (cabeçalho de cada tela) */
+.page-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0; align-items: stretch; margin: 0 0 18px; padding: 0; border: 1px solid var(--border-strong); background: var(--surface); }
+.ph-title { padding: 14px 18px 14px 16px; border-left: 6px solid var(--accent); min-width: 0; }
+.page-head h1 { font-size: 30px; line-height: 1.05; letter-spacing: .02em; margin: 0; padding: 0; border: 0; text-transform: none; }
+.page-head p { margin: 8px 0 0; padding: 0; color: var(--text-2); max-width: 72ch; }
+.title-block { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(110px, auto); margin: 0; border-left: 1px solid var(--border-strong); }
+.title-block > div { padding: 9px 14px; border-left: 1px solid var(--border); display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+.title-block > div:first-child { border-left: 0; }
+.title-block dt { font-size: 12px; color: var(--muted); }
+.title-block dd { margin: 3px 0 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+.ph-actions { grid-column: 1 / -1; border-top: 1px solid var(--border); padding: 8px 16px; }
+@media (max-width: 1100px) {
+  .page-head { grid-template-columns: minmax(0, 1fr); }
+  .title-block { grid-auto-flow: row; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); border-left: 0; border-top: 1px solid var(--border-strong); }
+  .title-block > div { border-left: 0; border-right: 1px solid var(--border); }
+  .page-head h1 { font-size: 24px; }
 }
-body { background: radial-gradient(1200px 500px at 100% -10%, rgba(225, 6, 0, .10), transparent 60%), var(--page-texture), var(--bg); background-attachment: fixed; }
 
-/* Títulos na fonte de display */
-h1, .page-head h1, .hero h1, .brand-name, .card > h2:first-child, .nav .grp, .stat, .tabs button, .el-card h3, .modal h2 {
-  font-family: var(--display-font);
-}
-h1, .page-head h1 { font-weight: 700; letter-spacing: 1.2px; }
-.page-head { margin-bottom: 18px; padding-bottom: 12px; border-bottom: 1px solid var(--border); position: relative; }
-.page-head::after { content: ""; position: absolute; left: 0; bottom: -1px; width: 120px; height: 2px; background: linear-gradient(90deg, var(--accent), transparent); }
-.page-head h1 { font-size: 24px; border-left-width: 5px; }
-.hero h1 { font-size: 32px; letter-spacing: 3px; }
-.brand-name { letter-spacing: 1.6px; }
-.card > h2:first-child { font-size: 15px; text-transform: uppercase; letter-spacing: 1.2px; }
-.nav .grp { letter-spacing: 2.4px; font-size: 11px; }
+/* Painéis: um nível só de moldura; o que está dentro de um painel não ganha outra caixa */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: none; padding: 16px 18px; }
+.card > h2:first-child { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
+.el-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+.card .el-card, .el-card .el-card { background: transparent; border: 0; border-top: 1px solid var(--border); border-radius: 0; padding: 12px 0 4px; }
+.el-card h3 { font-size: 15px; font-weight: 600; }
 
-/* Cartões */
-.card, .el-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: var(--radius); box-shadow: var(--shadow); transition: border-color .15s, box-shadow .15s; }
-.card:hover { border-color: color-mix(in srgb, var(--accent) 35%, var(--card-border)); }
-.card { padding: 16px 18px; }
-.el-card { padding: 14px 16px; }
-.el-card h3 { font-size: 15px; letter-spacing: 1px; text-transform: uppercase; }
+/* Números do projeto: uma régua, não quatro cartões */
+.grid.g4:has(> .card > .stat) { gap: 0; border: 1px solid var(--border); background: var(--surface); margin-bottom: 14px; }
+.grid.g4:has(> .card > .stat) > .card { border: 0; border-left: 1px solid var(--border); background: none; margin: 0; padding: 12px 18px; }
+.grid.g4:has(> .card > .stat) > .card:first-child { border-left: 0; }
+.stat { font-family: var(--font); font-size: 32px; font-weight: 600; line-height: 1.1; }
+.stat-label { font-size: 13px; color: var(--text-2); margin-top: 2px; }
 
-/* Indicadores (Dashboard) */
-.stat { font-size: 34px; font-weight: 700; line-height: 1.05; color: var(--text); letter-spacing: .5px; }
-.stat-label { text-transform: uppercase; letter-spacing: 1.2px; font-size: 11px; margin-top: 6px; color: var(--muted); }
-.grid.g4 > .card { position: relative; overflow: hidden; }
-.grid.g4 > .card::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: linear-gradient(90deg, var(--accent), transparent 80%); }
-
-/* Menu lateral com ícones */
-.nav a { margin: 1px 8px; border-radius: 8px; border-left: 0; padding: 8px 12px; position: relative; }
-.nav a .ico { width: 18px; height: 18px; flex: none; opacity: .75; }
-.nav a.active { background: linear-gradient(90deg, rgba(225, 6, 0, .30), rgba(225, 6, 0, .06)); box-shadow: inset 3px 0 0 var(--accent); }
-.nav a.active .ico { opacity: 1; color: #fff; }
+/* Menu lateral */
+.nav .grp { font-size: 12px; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--chrome-muted); padding: 16px 16px 4px; }
+.nav a { margin: 0; border-radius: 0; padding: 7px 16px 7px 13px; border-left: 3px solid transparent; }
+.nav a .ico { width: 18px; height: 18px; flex: none; opacity: .7; }
 .nav a .num { display: none; }
+.nav a.active { background: #1c1c1c; border-left-color: var(--accent); font-weight: 600; }
+.nav a.active .ico { opacity: 1; }
 
-/* Botões */
-button, .btn { border-radius: 8px; font-weight: 550; transition: background .12s, border-color .12s, box-shadow .12s, transform .05s; }
-button:active:not(:disabled) { transform: translateY(1px); }
-button.primary { background: linear-gradient(180deg, #ff1f14, #c40500); border-color: #c40500; box-shadow: 0 2px 10px rgba(225, 6, 0, .30); font-weight: 650; letter-spacing: .2px; }
-button.primary:hover { background: linear-gradient(180deg, #ff3a2f, #d40600); box-shadow: var(--glow); }
-button:focus-visible, .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Botões e campos */
+button, .btn { border-radius: 3px; font-weight: 500; transition: background-color .12s, border-color .12s; }
+button.primary { background: var(--accent); border-color: var(--accent); font-weight: 600; }
+button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+button:focus-visible, .btn:focus-visible, .tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.inp, input[type=text], input[type=number], select, textarea { background: var(--field-bg); border-radius: 3px; }
+.inp:focus-within { border-color: var(--accent); box-shadow: none; outline: 1px solid var(--accent); }
+.seg { border-radius: 3px; }
 
-/* Campos */
-.inp, input[type=text], input[type=number], select, textarea { background: var(--field-bg); border-radius: 7px; }
-.inp { transition: border-color .12s, box-shadow .12s; }
-.inp:focus-within { box-shadow: 0 0 0 3px rgba(225, 6, 0, .22); }
-.inp .unit { font-weight: 600; letter-spacing: .3px; }
-
-/* Abas e segmentos */
-.tabs { gap: 6px; border-bottom: 0; background: var(--surface); border: 1px solid var(--card-border); border-radius: 10px; padding: 4px; display: inline-flex; }
-.tabs button { border: 0; border-radius: 7px; padding: 7px 14px; font-size: 13px; letter-spacing: .8px; text-transform: uppercase; }
-.tabs button.on { background: linear-gradient(180deg, #ff1f14, #c40500); color: #fff; box-shadow: 0 2px 10px rgba(225, 6, 0, .30); }
-.seg { border-radius: 8px; }
+/* Abas: como as folhas de um caderno de desenhos */
+.tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border-strong); margin-bottom: 16px; }
+.tabs button { font-size: 14px; padding: 9px 14px; border: 0; border-bottom: 3px solid transparent; margin-bottom: -1px; border-radius: 0; background: none; color: var(--text-2); }
+.tabs button:hover { color: var(--text); background: none; }
+.tabs button.on { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
 
 /* Tabelas */
-.table-wrap { border-radius: 10px; border-color: var(--card-border); }
-th { background: #181818; text-transform: uppercase; font-size: 11px; letter-spacing: .8px; color: #bdbdbd; border-bottom: 2px solid var(--accent); }
-:root[data-theme="light"] th { background: #f4f4f4; color: #444; }
-tbody tr:nth-child(even) td { background: rgba(255, 255, 255, .018); }
-:root[data-theme="light"] tbody tr:nth-child(even) td { background: rgba(0, 0, 0, .02); }
-tr:hover td { background: rgba(225, 6, 0, .08) !important; }
+.table-wrap { border-radius: var(--radius); }
+th { font-size: 12.5px; font-weight: 600; color: var(--text-2); background: var(--surface-2); border-bottom: 1px solid var(--border-strong); }
+tr:hover td { background: var(--surface-2); }
 
-/* Selos, mensagens e gráficos */
-.badge { border-radius: 999px; padding: 2px 9px; letter-spacing: .2px; }
-.msgs li { border-radius: 8px; border-left: 3px solid transparent; }
+/* Selos, mensagens, gráficos */
+.badge { border-radius: 3px; padding: 1px 6px; }
+.msgs li { border-radius: var(--radius); border-left: 3px solid transparent; }
 .msgs li.erro { border-left-color: var(--err); } .msgs li.aviso { border-left-color: var(--warn); }
 .msgs li.ok { border-left-color: var(--ok); } .msgs li.info { border-left-color: var(--accent); }
-.plot { border-radius: 10px; border-color: var(--card-border); }
-.banner { border-radius: 10px; }
-.hero { border-radius: 14px; box-shadow: 0 10px 40px rgba(0, 0, 0, .45); }
+.plot, .banner, .eq, pre.out, .empty { border-radius: var(--radius); }
+.modal { border-radius: 4px; }
+.toast { border-radius: 3px; }
 
-/* Barras de rolagem escuras */
+/* Faixa de abertura (Dashboard): logotipo e nome da equipe */
+.hero { position: relative; overflow: hidden; background: #000; color: #fff; border: 1px solid #262626; border-bottom: 4px solid var(--accent); border-radius: var(--radius); padding: 22px 26px; margin-bottom: 16px; display: flex; gap: 24px; align-items: center; flex-wrap: wrap; }
+.hero { padding: 14px 22px; }
+.hero img { height: 76px; width: auto; position: relative; z-index: 1; }
+.hero .hero-text { position: relative; z-index: 1; min-width: 0; }
+.hero h1 { color: #fff; font-size: 26px; letter-spacing: .04em; margin: 0; }
+.hero h1 .mr { color: var(--accent-hover); font-style: italic; }
+.hero p { color: #cfcfcf; max-width: 64ch; margin: 8px 0 0; }
+.hero .swoosh { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+@media (max-width: 600px) { .hero img { height: 70px; } .hero h1 { font-size: 22px; } }
+.brand-name { font-family: var(--display-font); letter-spacing: .06em; }
+.brand-name small { text-transform: none; letter-spacing: .02em; font-size: 11px; }
+
+/* Barras de rolagem discretas */
 * { scrollbar-width: thin; scrollbar-color: #3a3a3a transparent; }
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: #2f2f2f; border-radius: 10px; border: 2px solid transparent; background-clip: content-box; }
-::-webkit-scrollbar-thumb:hover { background: #e10600; background-clip: content-box; }
-
-/* Entrada suave das telas */
-.main > div { animation: aeroIn .22s ease-out; }
-@keyframes aeroIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .main > div { animation: none; } * { transition: none !important; } }
-@media (max-width: 900px) { .tabs { display: flex; } .nav a { margin: 1px 6px; } }
+:root[data-theme="light"] * { scrollbar-color: #b5b5b5 transparent; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }

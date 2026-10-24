@@ -1,5 +1,6 @@
 // Utilidades compartilhadas pelas telas.
 import { h } from './dom.js';
+import * as store from './store.js';
 import { buildWing } from '../core/wing.js';
 import { computeDomain } from '../core/domain.js';
 
@@ -32,8 +33,24 @@ export function needs(what, ctx) {
 
 export function swatch(i) { return h('span', { class: 'el-swatch', style: { background: `var(--s${(i % 8) + 1})` } }); }
 
+/**
+ * Cabeçalho de tela no formato do carimbo de um desenho técnico: título à esquerda e, à direita,
+ * os campos do "carimbo" (projeto, pacote, rodada e situação). O sufixo " — nome" do título vai para o carimbo.
+ * Selos (badges) entram como situação; botões ficam numa linha abaixo.
+ */
 export function pageHead(title, desc, ...right) {
-  return h('div', { class: 'page-head' }, h('div', null, h('h1', null, title), desc ? h('p', null, desc) : null), right.length ? h('div', { class: 'row' }, ...right) : null);
+  const prj = store.activeProject(), pkg = store.activePackage(), run = store.activeRun();
+  const [head, ...rest] = String(title).split(' — '), suffix = rest.join(' — ');
+  const main = suffix && [pkg?.name, run?.name, `${pkg?.name} / ${run?.name}`].includes(suffix) ? head : String(title);
+  const cells = [['Projeto', prj?.name], ['Pacote', pkg?.name], ['Rodada', run?.name]].filter(([, v]) => v && v !== main);
+  const items = right.filter(Boolean);
+  const isBadge = (e) => e instanceof Element && e.classList.contains('badge');
+  const status = items.filter(isBadge), actions = items.filter((e) => !isBadge(e));
+  const cell = (k, ...v) => h('div', null, h('dt', null, k), h('dd', null, ...v));
+  return h('header', { class: 'page-head' },
+    h('div', { class: 'ph-title' }, h('h1', null, main), desc ? h('p', null, desc) : null),
+    cells.length || status.length ? h('dl', { class: 'title-block' }, ...cells.map(([k, v]) => cell(k, v)), status.length ? cell('Situação', ...status) : null) : null,
+    actions.length ? h('div', { class: 'ph-actions row' }, ...actions) : null);
 }
 
 export const hasExample = (run) => run?.dps?.some((d) => d.outputs?.isExample);
