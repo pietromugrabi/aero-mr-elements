@@ -24,7 +24,7 @@ export function needs(what, ctx) {
   const msg = { project: 'Nenhum projeto selecionado.', pkg: 'Nenhum pacote selecionado neste projeto.', run: 'Nenhuma rodada selecionada neste pacote.' };
   for (const w of what) {
     if ((w === 'project' && !ctx.project) || (w === 'pkg' && !ctx.pkg) || (w === 'run' && !ctx.run)) {
-      return h('div', { class: 'empty' }, h('p', null, msg[w]), h('p', null, 'Crie ou selecione em ', h('a', { href: '#projetos' }, 'Projetos'), ' (ou carregue o projeto de demonstração no ', h('a', { href: '#dashboard' }, 'Dashboard'), ').'));
+      return h('div', { class: 'empty' }, h('p', null, msg[w]), h('p', null, 'Crie ou selecione em ', h('a', { href: '#projetos' }, 'Projetos'), ' (ou carregue o projeto de exemplo no ', h('a', { href: '#dashboard' }, 'Dashboard'), ').'));
     }
   }
   return null;

@@ -4,6 +4,7 @@
 // Na abertura, carrega a cópia mais recente (campo savedAt) entre as duas.
 
 import { migrate, emptyState, logHistory, nowISO } from '../core/model.js';
+import { trimLegacyDemos } from '../core/demo.js';
 
 const DB = 'aero-multielemento', STORE = 'estado', KEY = 'app';
 let state = emptyState();
@@ -42,6 +43,7 @@ export async function load() {
   const pick = [local, remote].filter(Boolean).sort((a, b) => String(b.savedAt || '').localeCompare(String(a.savedAt || '')))[0];
   state = migrate(pick || emptyState());
   persist.lastSaved = state.savedAt;
+  if (trimLegacyDemos(state)) scheduleSave(); // exemplos antigos (DEMO, vários pacotes) → um só
   return state;
 }
 

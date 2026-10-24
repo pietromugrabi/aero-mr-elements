@@ -81,18 +81,30 @@ function addRun(pkg, name, levels, method = 'fatorial', skipEvery = 0) {
   return run;
 }
 
-export function buildDemoProject() {
-  const prj = newProject('DEMO — Asa dianteira 3 elementos (dados de exemplo)');
+export const EXAMPLE_NAME = 'Asa dianteira 3 elementos — exemplo';
+const MAIN_EXAMPLE_PACKAGE = 'S1223 3E — sem Gurney';
+
+/**
+ * Projeto de exemplo. Padrão: um único pacote (S1223 3E sem Gurney, 3 rodadas).
+ * `completo: true` acrescenta os pacotes com Gurney, NACA 23012 e slat (usado nos testes).
+ */
+export function buildDemoProject({ completo = false } = {}) {
+  const prj = newProject(EXAMPLE_NAME);
   prj.isDemo = true;
-  prj.description = 'Projeto de demonstração. Geometria = valores DS_ do estudo de referência. Todos os resultados são SINTÉTICOS (não são CFD).';
+  prj.description = 'Projeto de exemplo. Geometria = valores DS_ do estudo de referência. Todos os resultados são SINTÉTICOS (não são CFD).';
   prj.notes = 'Use este projeto para conhecer o fluxo. Os resultados foram gerados por uma fórmula arbitrária e estão marcados como EXEMPLO em todas as telas e exportações.';
 
-  const p1 = applyReferenceStudy(newPackage('S1223 3E — sem Gurney', 3), S1223_DAT, 'S1223');
+  const p1 = applyReferenceStudy(newPackage(MAIN_EXAMPLE_PACKAGE, 3), S1223_DAT, 'S1223');
   p1.config.domain.groundClearance = 60; // valor de exemplo
   p1.status = 'concluído';
   addRun(p1, 'Varredura AoA_2 × AoA_3', { AoA_2: '14; 18; 22', AoA_3: '28; 33; 38' });
   addRun(p1, 'Varredura Gap_2 × Overlap_2', { Gap_2: '5; 6; 7; 8', Overlap_2: '2,5; 3,5; 4,5' }, 'fatorial', 7);
   addRun(p1, 'Varredura de velocidade', { Uinf: '15:5:35' });
+  prj.packages.push(p1);
+  if (!completo) {
+    logHistory(prj, 'projeto', prj.name, 'criado', 'projeto de exemplo (resultados sintéticos)');
+    return prj;
+  }
 
   const p2 = applyReferenceStudy(newPackage('S1223 3E — com Gurney (el. 3)', 3), S1223_DAT, 'S1223', { gurneyOn: true });
   p2.config.domain.groundClearance = 60;
@@ -125,7 +137,31 @@ export function buildDemoProject() {
   r4.notes = 'Exemplo de DOE do slat; valores ilustrativos.';
   p4.runs.push(r4);
 
-  prj.packages.push(p1, p2, p3, p4);
-  logHistory(prj, 'projeto', prj.name, 'criado', 'projeto de demonstração (resultados sintéticos)');
+  prj.packages.push(p2, p3, p4);
+  logHistory(prj, 'projeto', prj.name, 'criado', 'projeto de exemplo completo (resultados sintéticos)');
   return prj;
+}
+
+/**
+ * Limpa projetos de exemplo antigos ("DEMO — …", com vários pacotes) salvos por versões anteriores:
+ * mantém um só, com o pacote principal, e sem "DEMO" no nome. Projetos de exemplo renomeados pelo
+ * usuário e projetos do usuário não são tocados. Retorna true se algo mudou.
+ */
+export function trimLegacyDemos(state) {
+  const legacy = state.projects.filter((p) => p.isDemo && /^DEMO\b/.test(p.name || ''));
+  if (!legacy.length) return false;
+  const hasNew = state.projects.some((p) => p.isDemo && !legacy.includes(p));
+  const keep = hasNew ? null : legacy[0];
+  state.projects = state.projects.filter((p) => !legacy.includes(p) || p === keep);
+  if (keep) {
+    keep.name = EXAMPLE_NAME;
+    keep.description = String(keep.description || '').replace('Projeto de demonstração', 'Projeto de exemplo');
+    const main = keep.packages.find((k) => k.name === MAIN_EXAMPLE_PACKAGE) || keep.packages[0];
+    keep.packages = main ? [main] : [];
+    logHistory(keep, 'projeto', keep.name, 'exemplo simplificado', 'mantido só o pacote principal; demais exemplos removidos');
+  }
+  const a = state.ui?.active;
+  if (a && !state.projects.some((p) => p.id === a.projectId)) state.ui.active = {};
+  else if (a && keep && a.projectId === keep.id && !keep.packages.some((k) => k.id === a.packageId)) state.ui.active = { projectId: keep.id };
+  return true;
 }

@@ -54,7 +54,7 @@ function topbar() {
       h('span', { class: 'muted' }, 'Projeto'), sel(st.projects, prj, (id) => store.setActive({ projectId: id }), '— sem projetos —'),
       h('span', { class: 'sep' }, '›'), h('span', { class: 'muted' }, 'Pacote'), sel(prj?.packages || [], pkg, (id) => store.setActive({ packageId: id }), '— sem pacotes —'),
       h('span', { class: 'sep' }, '›'), h('span', { class: 'muted' }, 'Rodada'), sel(pkg?.runs || [], run, (id) => store.setActive({ runId: id }), '— sem rodadas —'),
-      projectHasExample(prj) ? h('span', { class: 'badge example', title: 'Este projeto contém resultados sintéticos de demonstração' }, 'dados de exemplo') : null),
+      projectHasExample(prj) ? h('span', { class: 'badge example', title: 'Este projeto contém resultados sintéticos (dados de exemplo)' }, 'dados de exemplo') : null),
     h('select', { title: 'Tema', onchange: (e) => setTheme(e.target.value) },
       [['dark', 'Tema preto'], ['light', 'Tema claro']].map(([v, l]) => h('option', { value: v, selected: currentTheme() === v ? true : null }, l))),
     h('span', { class: 'savestate', id: 'savestate' }, saveText()));

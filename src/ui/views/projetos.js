@@ -39,13 +39,13 @@ export default function projetos(ctx) {
   const out = [pageHead('Projetos', 'Projetos → pacotes (configuração de geometria/CFD) → rodadas (DOE) → Design Points.',
     h('button', { class: 'primary', onclick: () => store.update((s) => { const p = newProject('Novo projeto'); s.projects.push(p); s.ui.active = { projectId: p.id }; }, null) }, '+ Novo projeto'),
     h('button', { onclick: importProjectJSON }, 'Importar projeto (.json)'),
-    h('button', { onclick: loadDemo }, 'Carregar demo'),
+    h('button', { onclick: loadDemo }, 'Carregar exemplo'),
     h('button', { onclick: backupAll }, 'Backup completo'),
     h('button', { onclick: restoreAll }, 'Restaurar backup'))];
 
   out.push(card('Projetos', st.projects.length ? table([
     { label: '', get: (p) => (prj && p.id === prj.id ? badge('ativo', 'info') : h('button', { class: 'small', onclick: () => store.setActive({ projectId: p.id }) }, 'Ativar')) },
-    { label: 'Nome', get: (p) => h('span', null, p.name, ' ', p.isDemo ? badge('demo', 'example') : '') },
+    { label: 'Nome', get: (p) => h('span', null, p.name, ' ', p.isDemo ? badge('exemplo', 'example') : '') },
     { label: 'Status', get: (p) => statusSel(p.status, (v) => store.update(() => { p.status = v; }, null)) },
     { label: 'Pacotes', num: true, get: (p) => p.packages.length },
     { label: 'DPs', num: true, get: (p) => p.packages.reduce((s, k) => s + k.runs.reduce((a, r) => a + r.dps.length, 0), 0) },

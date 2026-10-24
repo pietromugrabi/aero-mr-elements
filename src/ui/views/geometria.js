@@ -34,7 +34,7 @@ function generalCard(pkg) {
     h('div', { class: 'eq', style: { marginTop: '10px' } }, `${describeTransform(t)}\nEscoamento no sentido ${d.flowLabel} · sustentação positiva no sentido ${d.liftLabel}${t.sy < 0 ? ' (downforce para asa invertida)' : ''}\nA escala pela corda é aplicada uma única vez (o .dat é sempre normalizado antes).`),
     h('div', { class: 'row', style: { marginTop: '10px' } },
       h('button', { onclick: async () => { if (await confirmBox('Preencher com o estudo de referência', 'Substitui perfis e cotas de referência dos 3 primeiros elementos pelos valores do estudo de referência (S1223, 140/90/60 mm, 3/18/33°...). Continuar?', 'Preencher')) store.update(() => { if (c.elements.length < 3) setElementCount(c, 3); applyReferenceStudy(pkg, S1223_DAT, 'S1223', { gurneyOn: c.elements.some((e) => e.gurney?.enabled) }); }, ['geometria', pkg.name, 'preenchido com estudo de referência']); } }, 'Preencher com valores do estudo de referência'),
-      h('small', { class: 'muted' }, 'Valores de demonstração (cotas DS_ do modelo de referência).'),
+      h('small', { class: 'muted' }, 'Valores de exemplo (cotas DS_ do modelo de referência).'),
       h('span', { class: 'spacer' }),
       h('button', { onclick: () => store.update(() => { addSlat(c); }, ['geometria', pkg.name, 'slat adicionado', 'sem valores de referência']) }, '+ Adicionar slat')),
     h('p', { class: 'muted', style: { margin: '8px 0 0' } }, 'Slat = elemento a montante do elemento de referência (padrão: o principal). O app não preenche valores para o slat: informe corda, AoA, gap, overlap, pivô e .dat.'));

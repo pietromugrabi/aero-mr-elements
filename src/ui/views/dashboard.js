@@ -8,6 +8,8 @@ import { reportDefinitions, checkReports, referenceValues } from '../../core/flu
 import { collectRecords, filterRecords, ranking } from '../../core/chartdata.js';
 
 export function loadDemo() {
+  const existing = store.getState().projects.find((p) => p.isDemo);
+  if (existing) { store.setActive({ projectId: existing.id }); return; } // só um projeto de exemplo
   store.update((s) => {
     const p = buildDemoProject();
     s.projects.push(p);
@@ -18,10 +20,10 @@ export function loadDemo() {
 function welcome() {
   return h('div', null,
     hero('Prepare, organize e analise estudos CFD de perfis multielemento — asas, flaps, slats e Gurney flaps — feitos com SolidWorks + ANSYS Workbench/Fluent.'),
-    pageHead('Bem-vindo', 'Comece pelo projeto de demonstração ou crie um projeto novo.'),
+    pageHead('Bem-vindo', 'Comece pelo projeto de exemplo ou crie um projeto novo.'),
     h('div', { class: 'grid g2' },
-      card('Começar com o exemplo', h('p', null, 'Carrega um projeto de demonstração com 3 pacotes (S1223 com/sem Gurney e NACA 23012), DOEs e resultados. Os resultados são ', h('strong', null, 'sintéticos'), ' e ficam marcados como dados de exemplo em todas as telas.'),
-        h('button', { class: 'primary', onclick: loadDemo }, 'Carregar projeto de demonstração')),
+      card('Começar com o exemplo', h('p', null, 'Carrega um projeto de exemplo com uma asa de 3 elementos S1223 (cotas do estudo de referência), 3 rodadas de DOE e resultados. Os resultados são ', h('strong', null, 'sintéticos'), ' e ficam marcados como dados de exemplo em todas as telas.'),
+        h('button', { class: 'primary', onclick: loadDemo }, 'Carregar projeto de exemplo')),
       card('Começar do zero', h('p', null, 'Crie um projeto vazio e defina os elementos, os arquivos .dat e as cotas de referência.'),
         h('button', { onclick: () => store.update((s) => { const p = newProject('Novo projeto'); s.projects.push(p); s.ui.active = { projectId: p.id }; }), }, 'Novo projeto'),
         ' ', h('a', { href: '#projetos' }, 'ou importar um projeto (.json)'))),

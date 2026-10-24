@@ -74,8 +74,10 @@ ZIP/XLSX, relatório Excel com gráficos, slat, Gurney parametrizado e migraçã
 
 ## Fluxo de trabalho (exemplo com 3 elementos)
 
-1. **Dashboard → Carregar projeto de demonstração** para conhecer o app. Os resultados do demo são
-   **sintéticos** e aparecem marcados como *dados de exemplo* em todas as telas e exportações.
+1. **Dashboard → Carregar projeto de exemplo** para conhecer o app: uma asa de 3 elementos S1223
+   (pacote único, 3 rodadas de DOE). Os resultados do exemplo são **sintéticos** e aparecem marcados
+   como *dados de exemplo* em todas as telas e exportações. Existe no máximo um projeto de exemplo;
+   exemplos antigos ("DEMO — …", com vários pacotes) são reduzidos automaticamente a esse formato.
 2. **Projetos → + Novo projeto → + Novo pacote** (em branco com N elementos, ou "Estudo de
    referência" com as cotas DS_ padrão).
 3. **Geometria → Elementos e .dat**: carregue um `.dat` por elemento (há `samples/S1223.dat` e
@@ -103,7 +105,7 @@ ZIP/XLSX, relatório Excel com gráficos, slat, Gurney parametrizado e migraçã
 
 - **Tipo de elemento** (Geometria → Elementos): *principal* (ancorado), *flap* (a jusante do elemento de referência) ou *slat* (a montante). *+ Adicionar slat* cria um elemento sem nenhum valor preenchido — o app não inventa valores para o slat. Convenção do slat: `BF_slat = BA_ref + (+Overlap, +Gap)`: Overlap > 0 = BF do slat a jusante do BA do ref; Gap > 0 = lado de sucção. Nomes DS_: `DS_gap{slat}{ref}`, ex.: `DS_gap41`.
 - **Gurney flap** por elemento: ligado/desligado, altura `h` (mm e % da corda), espessura `t`, distância ao BF `pos` (0 = rente ao BF), lado (pressão/sucção) e referência da altura (linha da corda/BF, como `DS_gurney_h`, ou superfície local). Com h e t definidos, o DOE ganha `gurney_on_n` (0/1), `gurney_h_n`, `gurney_t_n` e `gurney_pos_n`, então *com × sem Gurney* cabe numa única rodada (gráficos agrupados por *gurney*). Ligar/desligar não é cota DS_: no SolidWorks use configurações/peças separadas.
-- O projeto de demonstração tem um pacote `EXEMPLO ILUSTRATIVO — 3E + slat` com valores do slat inventados (rotulados) e rodadas *com × sem Gurney* e *altura do Gurney* (resultados sintéticos).
+- Para experimentar slat e Gurney, use *+ Adicionar slat* e *+ Definir Gurney flap* em Geometria (o exemplo padrão não traz slat nem Gurney).
 
 ## Relatório Excel de cada rodada
 
