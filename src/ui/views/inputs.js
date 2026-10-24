@@ -1,7 +1,7 @@
 import { h, card, msgs, badge, checkField, seg, confirmBox, modal, toast, copyText, download, safeName } from '../dom.js';
 import * as store from '../store.js';
 import { needs, pageHead, wingOf } from '../common.js';
-import { doeVariables, derivedColumns, parseLevels, countDesigns, generateDesigns, makeDesignPoints, findDuplicates, LIMITS } from '../../core/doe.js';
+import { doeVariables, derivedColumns, parseLevels, countDesigns, generateDesigns, makeDesignPoints, findDuplicates, LIMITS, dpViolations, filterValidRows, doeRules } from '../../core/doe.js';
 import { referenceInputs, withDerivedPivots } from '../../core/wing.js';
 import { uid } from '../../core/model.js';
 import { parseNum, fmt } from '../../core/num.js';
@@ -23,9 +23,10 @@ function groupedColumns(pkg) {
 /** Validação geométrica de um DP (interseções, folgas, pivôs, cotas SolidWorks). */
 function checkDP(pkg, dp) {
   const w = wingOf(pkg, dp.inputs);
-  if (!w.plane) return { level: 'erro', msgs: w.errors };
+  const rule = dpViolations(pkg, dp.inputs).map((m) => `DP inválido pelas regras: ${m}`);
+  if (!w.plane) return { level: 'erro', msgs: [...rule, ...w.errors] };
   const e = w.asm.checks.filter((c) => c.level === 'erro'), a = w.asm.checks.filter((c) => c.level === 'aviso');
-  return { level: e.length ? 'erro' : a.length ? 'aviso' : 'ok', msgs: w.asm.checks.map((c) => c.msg), clearance: w.asm.slots.map((s) => s.clearance) };
+  return { level: e.length || rule.length ? 'erro' : a.length ? 'aviso' : 'ok', msgs: [...rule, ...w.asm.checks.map((c) => c.msg)], clearance: w.asm.slots.map((s) => s.clearance) };
 }
 
 async function pasteDialog(pkg, run) {
@@ -70,6 +71,12 @@ export default function inputs(ctx) {
   let refErr = null;
   try { withDerivedPivots(pkg, base, true); } catch (e) { refErr = e.message; }
   const count = countDesigns(doe.method, doe.levels, base);
+  // DPs que violam as regras do pacote (flap com corda maior / AoA menor que o elemento anterior) não são gerados
+  let split = null;
+  if (doe.method !== 'manual' && count <= LIMITS.max) { try { split = filterValidRows(pkg, generateDesigns(doe.method, doe.levels, base)); } catch (e) { split = null; } }
+  const nValid = split ? split.valid.length : count, nInvalid = split ? split.invalid.length : 0;
+  const rules = doeRules(pkg);
+  const setRule = (k, v) => store.update(() => { pkg.config.doeRules = { ...doeRules(pkg), [k]: v }; }, ['DOE', pkg.name, `regra de validade ${k}`, String(v)]);
   const groups = groupedColumns(pkg);
 
   // --- planejamento
@@ -83,20 +90,23 @@ export default function inputs(ctx) {
   const countMsg = doe.method === 'manual' ? { level: 'info', msg: 'Modo manual: adicione, edite ou cole linhas na tabela abaixo.' }
     : count > LIMITS.max ? { level: 'erro', msg: `${count} pontos excedem o limite de ${LIMITS.max}. Reduza os níveis.` }
       : count > LIMITS.confirm ? { level: 'aviso', msg: `${count} pontos: cada DP é uma simulação CFD completa. Será pedida confirmação.` }
-        : count > LIMITS.warn ? { level: 'aviso', msg: `${count} pontos — estudo grande (cada DP é uma simulação CFD).` } : { level: 'info', msg: `${count} ponto(s) serão gerados.` };
+        : nValid > LIMITS.warn ? { level: 'aviso', msg: `${nValid} pontos — estudo grande (cada DP é uma simulação CFD).` } : { level: 'info', msg: `${nValid} ponto(s) serão gerados.` };
+  const invalidMsg = nInvalid ? { level: 'aviso', msg: `${nInvalid} combinação(ões) inválida(s) não serão geradas (ex.: ${split.invalid[0].msgs.join('; ')}).` } : null;
   const generate = async (append) => {
     if (refErr) { toast(refErr, true); return; }
     if (count > LIMITS.max) return;
-    if (count > LIMITS.confirm && !(await confirmBox('DOE grande', `Gerar ${count} Design Points? Cada um é uma simulação CFD.`, 'Gerar'))) return;
+    if (nValid > LIMITS.confirm && !(await confirmBox('DOE grande', `Gerar ${nValid} Design Points? Cada um é uma simulação CFD.`, 'Gerar'))) return;
     if (!append && run.dps.some((d) => d.outputs) && !(await confirmBox('Substituir DPs', 'A rodada tem DPs com resultados. Substituir apaga esses resultados. Continuar?', 'Substituir', true))) return;
-    let rows;
-    try { rows = generateDesigns(doe.method, doe.levels, base); } catch (e) { toast(e.message, true); return; }
+    let rows, removed = 0;
+    try { const s = filterValidRows(pkg, generateDesigns(doe.method, doe.levels, base)); rows = s.valid; removed = s.invalid.length; } catch (e) { toast(e.message, true); return; }
+    if (!rows.length) { toast('Todas as combinações são inválidas pelas regras (corda do flap maior / AoA menor que o elemento anterior). Ajuste os níveis.', true); return; }
+    if (removed) toast(`${removed} combinação(ões) inválida(s) descartada(s); ${rows.length} DP(s) gerado(s).`);
     store.update(() => {
       const start = append ? run.dps.length : 0;
       const dps = makeDesignPoints(pkg, rows, { pivotScaling: doe.pivotScaling !== false, startIndex: start, uid: () => uid('dp') });
       run.dps = append ? run.dps.concat(dps) : dps;
       run.status = run.status === 'rascunho' ? 'em preparação' : run.status;
-    }, ['DOE', run.name, `${rows.length} DP(s) gerado(s)`, `${doe.method}${append ? ', acrescentados' : ''}`]);
+    }, ['DOE', run.name, `${rows.length} DP(s) gerado(s)`, `${doe.method}${append ? ', acrescentados' : ''}${removed ? `, ${removed} inválido(s) descartado(s)` : ''}`]);
     ui.checks = null;
   };
 
@@ -104,11 +114,14 @@ export default function inputs(ctx) {
     h('div', { class: 'row', style: { marginBottom: '10px' } }, h('span', { class: 'lbl' }, 'Método:'),
       seg([['fatorial', 'Fatorial completo'], ['oat', 'Um fator por vez'], ['manual', 'Manual']], doe.method, (v) => store.update(() => { doe.method = v; }, ['DOE', run.name, 'método', v])),
       checkField({ label: 'Pivôs acompanham a corda (pivot_n = pivot_ref/chord_ref·chord_n)', checked: doe.pivotScaling !== false, onChange: (v) => store.update(() => { doe.pivotScaling = v; run.dps.forEach((d) => { d.inputs = withDerivedPivots(pkg, d.inputs, v); }); }, ['DOE', run.name, 'escalonamento do pivô', String(v)]) })),
+    h('div', { class: 'row', style: { marginBottom: '10px' } }, h('span', { class: 'lbl' }, 'Não gerar DPs inválidos:'),
+      checkField({ label: 'flap com corda maior que o elemento anterior (chord_n > chord_(n−1))', checked: rules.chord, onChange: (v) => setRule('chord', v) }),
+      checkField({ label: 'flap com AoA menor que o elemento anterior (AoA_n < AoA_(n−1))', checked: rules.aoa, onChange: (v) => setRule('aoa', v) })),
     refErr ? msgs([{ level: 'erro', msg: `${refErr} Corrija os valores de referência na Geometria.` }]) : null,
     doe.method !== 'manual' ? h('div', { class: 'table-wrap' }, h('table', null, h('thead', null, h('tr', null, ['Grupo', 'Variável', 'Referência', 'Níveis', 'Interpretação'].map((t) => h('th', null, t)))), h('tbody', null, levelRows))) : null,
     doe.method !== 'manual' ? h('p', { class: 'muted' }, 'Separe níveis por ";" ou espaço (vírgula decimal aceita: "2,5; 3,5"), ou use início:passo:fim. Variáveis sem níveis ficam no valor de referência. Um fator por vez: o ponto base + cada variável variando sozinha.') : null,
-    msgs([countMsg]),
-    doe.method !== 'manual' ? h('div', { class: 'row' }, h('button', { class: 'primary', disabled: count > LIMITS.max || null, onclick: () => generate(false) }, `Gerar ${count} DP(s) (substituir)`), h('button', { disabled: count > LIMITS.max || null, onclick: () => generate(true) }, 'Gerar e acrescentar')) : null);
+    msgs([countMsg, ...(invalidMsg && doe.method !== 'manual' ? [invalidMsg] : [])]),
+    doe.method !== 'manual' ? h('div', { class: 'row' }, h('button', { class: 'primary', disabled: count > LIMITS.max || null, onclick: () => generate(false) }, `Gerar ${nValid} DP(s) (substituir)`), h('button', { disabled: count > LIMITS.max || null, onclick: () => generate(true) }, 'Gerar e acrescentar')) : null);
 
   // --- tabela
   const editKeys = new Set(vars.map((v) => v.key));

@@ -126,6 +126,40 @@ export function findDuplicates(rows, ks) {
   return dup;
 }
 
+/**
+ * Regras de validade dos DPs (pacote): cada flap comparado ao seu elemento de referência (n−1).
+ *  chord: inválido se chord_n > chord_(n−1) ;  aoa: inválido se AoA_n < AoA_(n−1).
+ * Slat e upperflap não entram (por construção têm corda/ângulo diferentes do principal).
+ */
+export const DEFAULT_DOE_RULES = Object.freeze({ chord: true, aoa: true });
+export const doeRules = (pkg) => ({ ...DEFAULT_DOE_RULES, ...(pkg.config.doeRules || {}) });
+
+/** Violações das regras para um conjunto de entradas (valores ausentes = referência). */
+export function dpViolations(pkg, inputs) {
+  const rules = doeRules(pkg), tp = topologyOf(pkg), els = pkg.config.elements, out = [];
+  const val = (k, d) => { const v = Number(inputs?.[k]); return inputs?.[k] != null && Number.isFinite(v) ? v : Number(d); };
+  els.forEach((el, i) => {
+    if (tp.kinds[i] !== 'flap') return;
+    const r = tp.refs[i], n = i + 1, m = r + 1;
+    if (rules.chord) {
+      const c = val(keys.chord(n), el.chord_ref), cr = val(keys.chord(m), els[r].chord_ref);
+      if (c > cr) out.push(`chord_${n} (${c}) > chord_${m} (${cr})`);
+    }
+    if (rules.aoa) {
+      const a = val(keys.aoa(n), el.aoa_ref), ar = val(keys.aoa(m), els[r].aoa_ref);
+      if (a < ar) out.push(`AoA_${n} (${a}°) < AoA_${m} (${ar}°)`);
+    }
+  });
+  return out;
+}
+
+/** Separa linhas válidas e inválidas pelas regras do pacote. */
+export function filterValidRows(pkg, rows) {
+  const valid = [], invalid = [];
+  rows.forEach((r) => { const v = dpViolations(pkg, r); (v.length ? invalid : valid).push(v.length ? { row: r, msgs: v } : r); });
+  return { valid, invalid };
+}
+
 /** Converte linhas em Design Points, com pivôs escalados pela corda (referências inalteradas). */
 export function makeDesignPoints(pkg, rows, { pivotScaling = true, startIndex = 0, uid } = {}) {
   const ref = referenceInputs(pkg);
