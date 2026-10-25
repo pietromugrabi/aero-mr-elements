@@ -232,10 +232,11 @@ function measurements(pkg, w) {
       { label: 'Par', get: (s) => `${s.pair[0]}–${s.pair[1]}${s.kind === 'slat' ? ' (slat)' : ''}` },
       { label: 'Gap ponto a ponto', unit: 'mm', num: true, get: (s) => gapCell(fmt(s.gapFlow, 3), cv.gapDef === 'ponto' && cv.gapAxes !== 'corda') },
       { label: 'Gap tangente', unit: 'mm', num: true, get: (s) => (s.gapTangent == null ? h('span', { class: 'muted', title: 'Não se aplica ao slat' }, '—') : gapCell(fmt(s.gapTangent, 3), cv.gapDef === 'tangente' && s.kind !== 'slat')) },
+      { label: 'Gap tangente livre', unit: 'mm', num: true, get: (s) => (s.gapTangentClear == null ? h('span', { class: 'muted', title: 'Não se aplica ao slat' }, '—') : gapCell(fmt(s.gapTangentClear, 3), cv.gapDef === 'tangenteLivre' && s.kind !== 'slat')) },
       { label: 'Folga real', unit: 'mm', num: true, get: (s) => (s.clearance === 0 ? badge('INTERSEÇÃO', 'err') : gapCell(fmt(s.clearance, 3), cv.gapDef === 'minimo')) },
       { label: 'Overlap escoam.', unit: 'mm', num: true, get: (s) => fmt(s.overlapFlow, 3) },
       { label: 'Gap eixos do ref', unit: 'mm', num: true, get: (s) => gapCell(fmt(s.gapChord, 3), cv.gapDef === 'ponto' && cv.gapAxes === 'corda') }, { label: 'Overlap eixos do ref', unit: 'mm', num: true, get: (s) => fmt(s.overlapChord, 3) },
-    ], w.asm.slots), h('p', { class: 'muted', style: { margin: '6px 0 0' } }, 'Três medidas do gap: ponto a ponto (BF do ref → BA do elemento, na vertical), tangente (BF do ref → reta horizontal tangente ao extradorso do flap) e folga real (menor distância entre os contornos). Em destaque, a que está comandando a montagem (Convenções → Definição do gap).')) : null,
+    ], w.asm.slots), h('p', { class: 'muted', style: { margin: '6px 0 0' } }, 'Medidas do gap: ponto a ponto (BF do ref → BA do elemento, na vertical), tangente (BF do ref → reta horizontal tangente ao extradorso do flap), tangente livre (ponto mais baixo do ref sobre o flap → mesma tangente; > 0 garante que não há interseção) e folga real (menor distância entre os contornos). Em destaque, a que está comandando a montagem (Convenções → Definição do gap).')) : null,
     h('h3', null, 'Verificações'),
     w.asm.checks.length ? msgs(w.asm.checks) : msgs([{ level: 'ok', msg: 'Sem interseções, pivôs dentro dos perfis e cotas válidas para o SolidWorks.' }]),
     h('p', { class: 'muted' }, `Coordenadas no plano ${t.plane} do CAD. Vista: roda do mouse = zoom, arrastar = mover. Linha vermelha = folga mínima da fenda.`));
@@ -515,7 +516,7 @@ function conventionsTab(pkg) {
         selectField({ label: 'Modo de montagem', value: cv.assemblyMode, options: [['sequencial', 'Sequencial: BA_n posicionado pelo BF_(n−1) (SolidWorks DS_)'], ['pivoFixo', 'Pivô fixo: monta com AoA = 0 e gira cada elemento no pivô']], onChange: (v) => set('assemblyMode', v, 'modo') }),
         selectField({ label: 'Origem', value: cv.anchor, options: [['pivo1', 'Pivô do elemento 1 na origem (DS_)'], ['ba1', 'BA do elemento 1 na origem']], onChange: (v) => set('anchor', v, 'origem') }),
         selectField({ label: 'Eixos de gap/overlap', value: cv.gapAxes, options: [['escoamento', 'Eixos do escoamento (horizontal/vertical, DS_)'], ['corda', 'Eixos da corda do elemento n−1']], onChange: (v) => set('gapAxes', v, 'eixos gap/overlap') }),
-        selectField({ label: 'Definição do gap', value: cv.gapDef, options: [['ponto', 'Ponto a ponto: BF_(n−1) → BA_n (DS_)'], ['minimo', 'Folga mínima entre contornos (largura da fenda)'], ['tangente', 'Vertical: BF_(n−1) → tangente horizontal ao extradorso do elemento n']], onChange: (v) => set('gapDef', v, 'definição do gap') }),
+        selectField({ label: 'Definição do gap', value: cv.gapDef, options: [['ponto', 'Ponto a ponto: BF_(n−1) → BA_n (DS_)'], ['minimo', 'Folga mínima entre contornos (largura da fenda)'], ['tangente', 'Vertical: BF_(n−1) → tangente horizontal ao extradorso do elemento n'], ['tangenteLivre', 'Vertical livre: ponto mais baixo do elemento n−1 → tangente ao extradorso do elemento n (Gap > 0 = sem interseção)']], onChange: (v) => set('gapDef', v, 'definição do gap') }),
         selectField({ label: 'Lado do pivot_off', value: cv.pivotSide, options: [['succao', 'Lado de sucção (DS_)'], ['pressao', 'Lado de pressão']], onChange: (v) => set('pivotSide', v, 'lado do pivô') }),
         selectField({ label: 'pivot_dTE medido', value: cv.pivotDTE, options: [['euclidiana', 'Distância pivô–BF (euclidiana, DS_)'], ['corda', 'Ao longo da corda a partir do BF']], onChange: (v) => set('pivotDTE', v, 'pivot_dTE') }),
         selectField({ label: 'Sinal do AoA', value: String(cv.aoaSign), options: [['1', '+ aumenta a sustentação (BF para cima na asa invertida, DS_)'], ['-1', '+ diminui a sustentação']], onChange: (v) => set('aoaSign', Number(v), 'sinal do AoA') }),
@@ -537,6 +538,7 @@ Elemento n ≥ 2 (sequencial):  BA_n = BF_(n−1) + (−Overlap_n, −Gap_n)
 Pivô fixo: monta com AoA = 0 e depois gira cada elemento em torno do próprio pivô.
 Gap como folga mínima: desloca BA_n na direção normal até min dist(contorno n−1, contorno n) = Gap_n (bissecção).
 Gap pela tangente: Gap_n = y(BF_(n−1)) − max y(extradorso_n)  (desloca o elemento n só na vertical; o overlap não muda).
+Gap pela tangente livre: Gap_n = min y(contorno_(n−1) sobre o elemento n) − max y(extradorso_n)  (Gap > 0 ⇒ sem interseção).
 
 Escalonamento do pivô no DOE:  pivot_off_n = pivot_off_ref_n/chord_ref_n · chord_n ;  pivot_dTE_n = pivot_dTE_ref_n/chord_ref_n · chord_n
 

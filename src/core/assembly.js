@@ -28,6 +28,8 @@
 //    até a reta horizontal tangente ao elemento — ao extradorso (ponto mais alto) de um flap, ao
 //    intradorso (ponto mais baixo) de um upperflap. O overlap não muda (deslocamento só vertical).
 //    O slat não tem essa definição e segue ponto a ponto.
+//    'tangenteLivre': como 'tangente', mas medido a partir do ponto mais baixo do elemento de cima
+//    sobre a faixa horizontal do flap (arco do BF e Gurney incluídos): Gap > 0 garante que não há interseção.
 
 import { DEG, add, sub, rotate, polygonDistance, polygonsIntersect, pointInPolygon, pointPolyline, bbox, selfIntersections } from './geom.js';
 import { pivotLocal } from './pivots.js';
@@ -111,11 +113,44 @@ export function tangentGap(kind, refPoint, pts) {
   return null;
 }
 
-/** Ajusta só na vertical para que o gap pela tangente seja igual ao Gap informado (relação linear). */
+/** Menor (lower=true) ou maior y do contorno dentro da faixa x ∈ [x0, x1], com as bordas interpoladas. */
+function yExtremeInRange(pts, x0, x1, lower) {
+  let best = null;
+  const take = (y) => { if (best === null || (lower ? y < best : y > best)) best = y; };
+  for (let k = 0; k < pts.length; k++) {
+    const p = pts[k], q = pts[(k + 1) % pts.length];
+    if (p[0] >= x0 && p[0] <= x1) take(p[1]);
+    [x0, x1].forEach((x) => { if ((p[0] - x) * (q[0] - x) < 0) take(p[1] + ((q[1] - p[1]) * (x - p[0])) / (q[0] - p[0])); });
+  }
+  return best;
+}
+
+/**
+ * Gap vertical livre: do ponto mais baixo do elemento de cima (dentro da faixa horizontal ocupada pelo
+ * flap) até a reta horizontal tangente ao extradorso do flap. Com Gap > 0 os contornos ficam separados
+ * por uma reta horizontal, então não podem se tocar; Gap = 0 é o encosto. Upperflap: espelhado.
+ * Se o elemento de cima não passa por cima do flap (sem sobreposição horizontal), usa o ponto de
+ * referência (BF), como no gap pela tangente. null para slat.
+ */
+export function clearTangentGap(kind, refPts, refPoint, pts) {
+  if (kind !== 'flap' && kind !== 'upperflap') return null;
+  const xs = pts.map((p) => p[0]), x0 = Math.min(...xs), x1 = Math.max(...xs);
+  if (kind === 'flap') {
+    const low = yExtremeInRange(refPts, x0, x1, true);
+    return (low ?? refPoint[1]) - Math.max(...pts.map((p) => p[1]));
+  }
+  const high = yExtremeInRange(refPts, x0, x1, false);
+  return Math.min(...pts.map((p) => p[1])) - (high ?? refPoint[1]);
+}
+
+/**
+ * Ajusta só na vertical para que o gap pela tangente (pelo BF ou pelo ponto mais baixo do elemento de
+ * cima) seja igual ao Gap informado. O deslocamento vertical não muda a faixa x, então é linear.
+ */
 function solveTangentGap(e, kind, piv, theta, ref, conv) {
   const rule = placementRule(kind, e.upAnchor);
   const shape0 = placeRelative(e, kind, piv, theta, ref, conv, e.gap);
-  const g0 = tangentGap(kind, ref[rule.refPt], shape0.pts);
+  const g0 = conv.gapDef === 'tangenteLivre' ? clearTangentGap(kind, ref.pts, ref[rule.refPt], shape0.pts) : tangentGap(kind, ref[rule.refPt], shape0.pts);
   if (g0 == null) return { ok: false, msg: 'gap pela tangente vale para flap e upperflap; o slat segue ponto a ponto.' };
   const delta = e.gap - g0; // flap desce, upperflap sobe
   return { ok: true, shape: placeRelative(e, kind, piv, theta, ref, conv, e.gap, kind === 'upperflap' ? delta : -delta) };
@@ -155,7 +190,7 @@ export function assemble(elems, conv = DEFAULT_CONV) {
       if (conv.gapDef === 'minimo') {
         const solved = solveMinGap(e, kinds[i], piv, theta, ref, conv);
         if (solved.ok) shape = solved.shape; else checks.push({ level: 'aviso', elem: i, msg: `Elemento ${i + 1}: ${solved.msg}` });
-      } else if (conv.gapDef === 'tangente') {
+      } else if (conv.gapDef === 'tangente' || conv.gapDef === 'tangenteLivre') {
         const solved = solveTangentGap(e, kinds[i], piv, theta, ref, conv);
         if (solved.ok) shape = solved.shape; else checks.push({ level: 'info', elem: i, msg: `Elemento ${i + 1}: ${solved.msg}` });
       }
@@ -199,6 +234,7 @@ export function assemble(elems, conv = DEFAULT_CONV) {
       from: a[rule.refPt], to: b[rule.own],
       overlapFlow: d[0] / rule.sx, gapFlow: d[1] / rule.sy, overlapChord: dc[0] / rule.sx, gapChord: dc[1] / rule.sy,
       gapTangent: tangentGap(kind, a[rule.refPt], b.pts),
+      gapTangentClear: clearTangentGap(kind, a.pts, a[rule.refPt], b.pts),
       clearance: md.d, pa: md.pa, pb: md.pb,
     });
   });
