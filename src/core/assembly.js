@@ -23,7 +23,11 @@
 //  - assemblyMode 'pivoFixo': monta com todas as cordas alinhadas ao escoamento (AoA = 0) e depois
 //    gira cada elemento em torno do próprio pivô.
 //  - gapDef 'ponto' (padrão): gap = componente normal entre os pontos de referência; 'minimo':
-//    gap = folga mínima entre os contornos do elemento e do ref (resolvido por bissecção).
+//    gap = folga mínima entre os contornos do elemento e do ref (resolvido por bissecção);
+//    'tangente': gap = distância vertical do ponto de referência do ref (BF; BA no upperflap pelo BA)
+//    até a reta horizontal tangente ao elemento — ao extradorso (ponto mais alto) de um flap, ao
+//    intradorso (ponto mais baixo) de um upperflap. O overlap não muda (deslocamento só vertical).
+//    O slat não tem essa definição e segue ponto a ponto.
 
 import { DEG, add, sub, rotate, polygonDistance, polygonsIntersect, pointInPolygon, pointPolyline, bbox, selfIntersections } from './geom.js';
 import { pivotLocal } from './pivots.js';
@@ -86,14 +90,35 @@ function offsetVec(rule, overlap, gap, axes, thetaRef) {
   return axes === 'corda' ? rotate(v, thetaRef) : v;
 }
 
-/** Posiciona o elemento i (já girado) em relação ao ref. */
-function placeRelative(e, kind, piv, theta, ref, conv, gapValue) {
+/** Posiciona o elemento i (já girado) em relação ao ref; dy = deslocamento vertical extra. */
+function placeRelative(e, kind, piv, theta, ref, conv, gapValue, dy = 0) {
   const rotOnly = placeShape(e.local, e.chord, piv, theta, [0, 0]);
   const rule = placementRule(kind, e.upAnchor);
   const anchorRef = ref[rule.refPt];
   const own = rotOnly[rule.own];
   const target = add(anchorRef, offsetVec(rule, e.overlap, gapValue, conv.gapAxes, ref.theta));
-  return placeShape(e.local, e.chord, piv, theta, sub(target, own));
+  return placeShape(e.local, e.chord, piv, theta, add(sub(target, own), [0, dy]));
+}
+
+/**
+ * Gap pela tangente horizontal: distância vertical do ponto de referência do ref até a reta horizontal
+ * tangente ao elemento (flap: ponto mais alto, no extradorso; upperflap: ponto mais baixo, no intradorso).
+ * > 0 = há folga vertical; ≤ 0 = o elemento passa da linha do ponto de referência. null para slat.
+ */
+export function tangentGap(kind, refPoint, pts) {
+  if (kind === 'flap') return refPoint[1] - Math.max(...pts.map((p) => p[1]));
+  if (kind === 'upperflap') return Math.min(...pts.map((p) => p[1])) - refPoint[1];
+  return null;
+}
+
+/** Ajusta só na vertical para que o gap pela tangente seja igual ao Gap informado (relação linear). */
+function solveTangentGap(e, kind, piv, theta, ref, conv) {
+  const rule = placementRule(kind, e.upAnchor);
+  const shape0 = placeRelative(e, kind, piv, theta, ref, conv, e.gap);
+  const g0 = tangentGap(kind, ref[rule.refPt], shape0.pts);
+  if (g0 == null) return { ok: false, msg: 'gap pela tangente vale para flap e upperflap; o slat segue ponto a ponto.' };
+  const delta = e.gap - g0; // flap desce, upperflap sobe
+  return { ok: true, shape: placeRelative(e, kind, piv, theta, ref, conv, e.gap, kind === 'upperflap' ? delta : -delta) };
 }
 
 /**
@@ -130,6 +155,9 @@ export function assemble(elems, conv = DEFAULT_CONV) {
       if (conv.gapDef === 'minimo') {
         const solved = solveMinGap(e, kinds[i], piv, theta, ref, conv);
         if (solved.ok) shape = solved.shape; else checks.push({ level: 'aviso', elem: i, msg: `Elemento ${i + 1}: ${solved.msg}` });
+      } else if (conv.gapDef === 'tangente') {
+        const solved = solveTangentGap(e, kinds[i], piv, theta, ref, conv);
+        if (solved.ok) shape = solved.shape; else checks.push({ level: 'info', elem: i, msg: `Elemento ${i + 1}: ${solved.msg}` });
       }
       placed[i] = { ...shape, theta };
     });
@@ -170,6 +198,7 @@ export function assemble(elems, conv = DEFAULT_CONV) {
       pair: kind === 'slat' ? [i + 1, r + 1] : [r + 1, i + 1], // slat: de montante para jusante
       from: a[rule.refPt], to: b[rule.own],
       overlapFlow: d[0] / rule.sx, gapFlow: d[1] / rule.sy, overlapChord: dc[0] / rule.sx, gapChord: dc[1] / rule.sy,
+      gapTangent: tangentGap(kind, a[rule.refPt], b.pts),
       clearance: md.d, pa: md.pa, pb: md.pb,
     });
   });
