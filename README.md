@@ -138,6 +138,19 @@ A aba **Gráficos** usa o Apache ECharts: roda do mouse dá zoom nos eixos, os �
 
 Geometria → aba **Mapa de conflito**. Escolha 2 variáveis (ex.: Gap_2 × Overlap_2 ou AoA_2 × Gap_2), as faixas e a resolução (15, 25 ou 40 pontos por eixo); as demais ficam no valor de referência. O app monta a asa em cada ponto e pinta: verde = OK, amarelo = aviso (folga da fenda abaixo do mínimo, pivô fora do perfil...), cinza = regra do DOE (corda/AoA), vermelho = erro (elementos se atravessando, auto-interseção, cota inválida). Mostra as faixas sem erro na linha e na coluna da referência; clicar numa célula mostra o motivo e permite gravar aqueles valores como referência. Uma grade 25 × 25 leva poucos segundos.
 
+## Otimização alternada
+
+Inputs / Design Points → cartão **Otimização alternada** (busca por blocos: cada rodada varia um bloco de variáveis com as demais fixas).
+
+1. Escolha o **critério** do pacote (Cl_total, Cl/Cd, lift_el2...) e o **objetivo**: maior |valor| (downforce com Cl < 0), maior ou menor valor.
+2. Com os resultados importados, o cartão mostra o **melhor DP** da rodada (dá para fixar outro), os níveis testados e avisa quando o ótimo caiu na **borda** da faixa (o ótimo pode estar fora dela).
+3. **Próxima rodada**: escolha o bloco (a ordem da passada é AoA_1 × AoA_2 → Gap_1 × Overlap_1 → AoA_2 × AoA_3 → Gap_2 × Overlap_2; com o ótimo na borda o padrão é repetir o bloco). Os níveis vêm propostos e são editáveis:
+   - variável nova na cadeia: 5 níveis com passo padrão (2° para AoA, 2 mm para gap/overlap, 0,01 para x/c);
+   - ótimo no interior: refino com 3 níveis e metade do passo;
+   - ótimo na borda: mesmo passo, faixa recentrada no melhor valor.
+4. **Criar próxima rodada** cria a rodada (fatorial), com as demais variáveis fixas nos valores do DP escolhido (selo "herdado" no Planejamento), aplica as regras de validade e a verificação de geometria, gera os DPs e a torna ativa. O Mapa de conflito usa esses valores fixos.
+5. O cartão mostra a **cadeia** de rodadas e a melhora em relação à rodada anterior; abaixo da tolerância (padrão 1 %), depois de percorrer todos os blocos, a otimização convergiu.
+
 ## Sugestões de chord, AoA, Gap e Overlap
 
 Geometria → aba **Sugestões**. Faixas editáveis por tipo (flap, slat, upperflap), relativas ao elemento de referência: `chord_n = razão · chord_ref`, `AoA_n = AoA_ref + ΔAoA`, `Gap/Overlap = fração · chord_ref`. Opcionalmente, informe a corda total disponível para dividi-la entre os elementos. Os padrões de flap e slat são faixas típicas de partida, não valores otimizados; o upperflap vem vazio. Botões: **Aplicar valores centrais na geometria** (os pivôs escalam com a corda) e **Níveis no DOE** (mín; centro; máx de AoA, Gap e Overlap na rodada ativa).

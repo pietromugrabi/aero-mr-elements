@@ -410,7 +410,7 @@ function conflictTab(pkg, ctx) {
   const run = () => {
     const bad = [cm.xMin, cm.xMax, cm.yMin, cm.yMax].some((v) => v == null || !Number.isFinite(Number(v)));
     if (bad || !(cm.xMax > cm.xMin) || !(cm.yMax > cm.yMin)) { toast('Informe mín < máx nos dois eixos.', true); return; }
-    const grid = makeGrid(pkg, { x: { key: cm.x, min: cm.xMin, max: cm.xMax }, y: { key: cm.y, min: cm.yMin, max: cm.yMax }, nx: cm.n, ny: cm.n });
+    const grid = makeGrid(pkg, { x: { key: cm.x, min: cm.xMin, max: cm.xMax }, y: { key: cm.y, min: cm.yMin, max: cm.yMax }, nx: cm.n, ny: cm.n, base: ctx.run?.doe?.base });
     grid.at = new Date(); grid.labels = { x: X, y: Y };
     cm.grid = grid; cm.sel = null; cm.running = true;
     const total = grid.xs.length * grid.ys.length, t0 = performance.now();

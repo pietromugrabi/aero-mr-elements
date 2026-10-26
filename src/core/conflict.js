@@ -44,8 +44,8 @@ export function evalPoint(pkg, inputs, pivotScaling = true) {
  * Prepara a grade. A avaliação é feita por evalCell (em lotes, para não travar a interface).
  * @returns {{xs, ys, cells: (null|{status,msgs,clearance})[][], base}}
  */
-export function makeGrid(pkg, { x, y, nx = 25, ny = 25 }) {
-  const base = referenceInputs(pkg);
+export function makeGrid(pkg, { x, y, nx = 25, ny = 25, base: fixed = null }) {
+  const base = { ...referenceInputs(pkg), ...(fixed || {}) }; // fixed = valores herdados da rodada (otimização alternada)
   return { xKey: x.key, yKey: y.key, xs: linspace(Number(x.min), Number(x.max), nx), ys: linspace(Number(y.min), Number(y.max), ny), cells: Array.from({ length: ny }, () => Array(nx).fill(null)), base };
 }
 
