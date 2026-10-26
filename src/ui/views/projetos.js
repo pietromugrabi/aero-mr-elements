@@ -85,7 +85,7 @@ export default function projetos(ctx) {
       pkg.runs.length ? table([
         { label: '', get: (r) => (run && r.id === run.id ? badge('ativa', 'info') : h('button', { class: 'small', onclick: () => store.setActive({ runId: r.id }) }, 'Ativar')) },
         { label: 'Nome', get: (r) => r.name },
-        { label: 'Método', get: (r) => ({ fatorial: 'fatorial completo', oat: 'um fator por vez', manual: 'manual' })[r.doe.method] || r.doe.method },
+        { label: 'Método', get: (r) => ({ fatorial: 'fatorial completo', oat: 'um fator por vez', alternada: 'otimização alternada', manual: 'manual' })[r.doe.method] || r.doe.method },
         { label: 'DPs', num: true, get: (r) => r.dps.length },
         { label: 'Com resultado', num: true, get: (r) => r.dps.filter((d) => d.outputs?.raw).length },
         { label: 'Status', get: (r) => statusSel(r.status, (v) => store.update(() => { r.status = v; }, ['rodada', r.name, 'status', v])) },

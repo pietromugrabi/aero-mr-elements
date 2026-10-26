@@ -1,230 +1,152 @@
-// Otimização alternada (como a planilha "Otimização Alternada"): cada rodada varia 2 parâmetros
-// numa grade (ex.: AoA_1 × AoA_2); acha-se o melhor DP pelo critério (|lift|, |Cl| ou |Cl|/Cd) e a
-// região de valores vizinhos quase tão bons; o centro dessa região (ou o próprio DP) vira o ponto
-// fixo da próxima rodada, que varia outro par (ex.: Gap_1 × Overlap_1). Uma passada percorre todos
-// os pares; as seguintes refinam (passo pela metade) até a melhora ficar abaixo da tolerância.
-// Sem DOM. As rodadas encadeadas guardam run.alt = { step, fromRunId, fromDpId, ... } e
-// run.doe.base = valores fixos herdados do melhor DP.
+// Método de DOE "Otimização alternada" (como a planilha "Otimização Alternada"), por etapas dentro
+// da mesma rodada:
+//   etapa 1: fatorial de 1–2 variáveis (ex.: AoA_1 × AoA_2, 5 níveis cada) → tabela como a planilha;
+//   etapa k: entra outra variável (ex.: AoA_3, 5 níveis), cruzada só com as melhores combinações da
+//            etapa anterior: o máximo do critério (|lift|, |Cl| ou |Cl|/Cd) e seus vizinhos
+//            (cada variável a no máximo 1 nível de distância do máximo).
+// Os DPs guardam dp.stage (0, 1, ...). Sem DOM.
 
 import { computeDP, flatMetrics } from './outputs.js';
-import { doeVariables, generateDesigns, filterValidRows, makeDesignPoints, LIMITS } from './doe.js';
-import { referenceInputs, topologyOf, pairOf, isRelGap, keys } from './wing.js';
-import { newRun } from './model.js';
+import { generateDesigns, parseLevels } from './doe.js';
+import { referenceInputs } from './wing.js';
 
 /** Critérios (sempre em módulo: downforce sai com sinal negativo no Fluent). */
 export const CRITERIA = [['L', 'maior |lift| (Lift_force)'], ['Cl', 'maior |Cl| (Cl_total)'], ['ClCd', 'maior |Cl|/Cd']];
-/** band = faixa (% do melhor) da região vizinha; fix = 'regiao' (centro da região) | 'dp' (valores exatos de um DP). */
-export const DEFAULT_ALT = Object.freeze({ metric: 'Cl', goal: 'absmax', tol: 1, nLevels: 5, band: 2, fix: 'regiao' });
-export function altConfig(pkg) {
-  const c = { ...DEFAULT_ALT, ...(pkg.config.altOpt || {}) };
+/** Quais vizinhos do máximo seguem para a próxima etapa. */
+export const NEIGHBOR_MODES = [['todos', 'máximo + todos os vizinhos'], ['faixa', 'máximo + vizinhos a até a faixa % do máximo']];
+export const DEFAULT_ALT = Object.freeze({ metric: 'Cl', neighbors: 'todos', band: 2 });
+
+export function altConfig(run) {
+  const c = { ...DEFAULT_ALT, ...(run?.doe?.altOpt || {}) };
   if (!CRITERIA.some(([k]) => k === c.metric)) c.metric = DEFAULT_ALT.metric;
-  c.goal = 'absmax';
   return c;
 }
 
-/** Pontuação (maior = melhor) de um valor pelo objetivo. */
-export function score(v, goal) { return goal === 'absmax' ? Math.abs(v) : goal === 'min' ? -v : v; }
-
-/** Valores fixos de uma rodada: referência do pacote + valores herdados do melhor DP anterior. */
+/** Valores fixos de uma rodada: referência do pacote + valores herdados (doe.base), se houver. */
 export function runBase(pkg, run) { return { ...referenceInputs(pkg), ...(run?.doe?.base || {}) }; }
 
 const r6 = (v) => +Number(v).toPrecision(6);
+const uniq = (a) => [...new Set(a)];
 
-/** DPs com resultado ordenados pelo critério (exclui os marcados como "falhou"). */
-export function rankRun(pkg, run, { metric, goal } = altConfig(pkg)) {
-  const ranked = [];
-  run.dps.forEach((dp) => {
-    if (dp.status === 'falhou') return;
-    const c = computeDP(dp, pkg);
-    if (!c.has) return;
-    const v = flatMetrics(c)[metric];
-    if (Number.isFinite(v)) ranked.push({ dp, v, s: score(v, goal), stale: !!dp.outputsStale, example: !!dp.outputs?.isExample });
+export const stagesOf = (run) => run.doe.stages || [];
+export const stageDps = (run, k) => run.dps.filter((d) => d.stage === k);
+
+/** Variáveis das etapas 0..k (sem repetição, na ordem em que entraram). */
+export function keysUpTo(run, k) { return uniq(stagesOf(run).slice(0, k + 1).flatMap((s) => s.keys || [])); }
+
+/** Valor de uma métrica num DP (null sem resultado ou com status "falhou"). */
+export function metricOf(pkg, dp, metric) {
+  if (dp.status === 'falhou') return null;
+  const c = computeDP(dp, pkg);
+  if (!c.has) return null;
+  const v = flatMetrics(c)[metric];
+  return Number.isFinite(v) ? v : null;
+}
+
+/** DPs com resultado ordenados por |critério| (maior primeiro). */
+export function rankDps(pkg, dps, metric) {
+  return dps.map((dp) => ({ dp, v: metricOf(pkg, dp, metric) })).filter((x) => x.v != null).map((x) => ({ ...x, s: Math.abs(x.v) })).sort((a, b) => b.s - a.s);
+}
+
+/** Níveis usados (ordenados) de cada variável num conjunto de DPs. */
+export function levelsUsed(dps, ks) {
+  return Object.fromEntries(ks.map((k) => [k, uniq(dps.map((d) => Number(d.inputs[k])).filter(Number.isFinite).map(r6)).sort((a, b) => a - b)]));
+}
+
+/**
+ * Melhores combinações da etapa k, que seguem para a etapa k+1: o máximo e seus vizinhos
+ * (todas as variáveis das etapas 0..k a no máximo 1 nível do máximo; no modo 'faixa', só os
+ * vizinhos com |critério| ≥ (1 − faixa%) · máximo).
+ * @returns {null | {best, selected, combos:[{combo, dp, v}], keys, ranked, nResults, nTotal}}
+ */
+export function carried(pkg, run, k, cfg = altConfig(run)) {
+  const dps = stageDps(run, k), ranked = rankDps(pkg, dps, cfg.metric);
+  if (!ranked.length) return null;
+  const ks = keysUpTo(run, k), lv = levelsUsed(dps, ks);
+  const ix = (dp) => ks.map((key) => lv[key].indexOf(r6(dp.inputs[key])));
+  const best = ranked[0], bi = ix(best.dp);
+  const lim = cfg.neighbors === 'faixa' ? best.s * (1 - (Number(cfg.band) || 0) / 100) : -Infinity;
+  const selected = ranked.filter((c) => c === best || (c.s >= lim && ix(c.dp).every((x, j) => Math.abs(x - bi[j]) <= 1)));
+  const seen = new Set(), combos = [];
+  selected.forEach((c) => {
+    const combo = Object.fromEntries(ks.map((key) => [key, Number(c.dp.inputs[key])]));
+    const id = ks.map((key) => r6(combo[key])).join('|');
+    if (!seen.has(id)) { seen.add(id); combos.push({ combo, dp: c.dp, v: c.v }); }
   });
-  ranked.sort((a, b) => b.s - a.s);
-  return { best: ranked[0] || null, ranked, nResults: ranked.length, nTotal: run.dps.length };
+  return { best, selected, ids: new Set(selected.map((c) => c.dp.id)), combos, keys: ks, ranked, nResults: ranked.length, nTotal: dps.length };
 }
 
-/** Variáveis do DOE que variam entre os DPs da rodada, com os níveis usados e o passo. */
-export function variedVars(pkg, run) {
-  return doeVariables(pkg).map((v) => {
-    const lv = [...new Set(run.dps.map((d) => Number(d.inputs[v.key])).filter(Number.isFinite).map(r6))].sort((a, b) => a - b);
-    const steps = lv.slice(1).map((x, i) => x - lv[i]);
-    return { ...v, levels: lv, step: steps.length ? r6(Math.min(...steps)) : null };
-  }).filter((v) => v.levels.length > 1);
-}
-
-/** O melhor valor de cada variável variada caiu na borda da faixa? ('min' | 'max' | null). */
-export function edges(pkg, run, dp) {
-  return variedVars(pkg, run).map((v) => {
-    const x = r6(dp.inputs[v.key]);
-    return { key: v.key, label: v.label, unit: v.unit, value: x, levels: v.levels, step: v.step, edge: x <= v.levels[0] ? 'min' : x >= v.levels[v.levels.length - 1] ? 'max' : null };
+/** Problemas de configuração de uma etapa (variáveis e níveis). */
+export function stageErrors(run, k, varKeys) {
+  const st = stagesOf(run)[k], out = [];
+  const ks = (st?.keys || []).filter(Boolean);
+  if (!ks.length) out.push('escolha a variável');
+  if (uniq(ks).length < ks.length) out.push('variáveis repetidas');
+  ks.forEach((key) => {
+    if (varKeys && !varKeys.includes(key)) out.push(`${key} não existe neste pacote`);
+    const p = parseLevels(st.levels?.[key]);
+    if (p.error && !p.values.length) out.push(`${key}: ${p.error}`);
+    else if (!p.values.length) out.push(`${key}: informe os níveis`);
   });
-}
-
-/** Valores das variáveis do DOE no DP escolhido (passam a ser os fixos da próxima rodada). */
-export function fixedFrom(pkg, dp) {
-  const out = {};
-  doeVariables(pkg).forEach((v) => { const x = Number(dp.inputs[v.key]); if (Number.isFinite(x)) out[v.key] = x; });
   return out;
 }
 
 /**
- * Grade 2D da rodada (como a planilha): exige exatamente 2 variáveis variadas.
- * cells[j][i] = melhor registro {dp, v, s} com Y = ys[j] e X = xs[i] (null = sem resultado).
+ * Linhas (entradas completas) da etapa k: etapa 0 = fatorial das suas variáveis; etapa k > 0 =
+ * melhores combinações da etapa k−1 × fatorial das variáveis novas.
  */
-export function grid2D(pkg, run, cfg = altConfig(pkg)) {
-  const vv = variedVars(pkg, run);
-  if (vv.length !== 2) return null;
-  const [X, Y] = vv, R = rankRun(pkg, run, cfg);
-  const cells = Y.levels.map(() => X.levels.map(() => null));
-  R.ranked.forEach((c) => {
-    const i = X.levels.indexOf(r6(c.dp.inputs[X.key])), j = Y.levels.indexOf(r6(c.dp.inputs[Y.key]));
-    if (i >= 0 && j >= 0 && !cells[j][i]) cells[j][i] = c;
+export function stageRows(pkg, run, k, base, cfg = altConfig(run)) {
+  const st = stagesOf(run)[k];
+  const lv = Object.fromEntries((st.keys || []).filter(Boolean).map((key) => [key, st.levels?.[key] || '']));
+  const grid = generateDesigns('fatorial', lv, {});
+  if (k === 0) return { rows: grid.map((g) => ({ ...base, ...g })), prev: null };
+  const prev = carried(pkg, run, k - 1, cfg);
+  if (!prev) return { rows: [], prev: null, error: `A etapa ${k} ainda não tem resultados: rode os DPs no Fluent e importe (aba Outputs).` };
+  return { rows: prev.combos.flatMap((c) => grid.map((g) => ({ ...base, ...c.combo, ...g }))), prev };
+}
+
+/** Nº de DPs previsto da etapa k (null se depende de resultados que ainda não existem). */
+export function stageCount(pkg, run, k, cfg = altConfig(run)) {
+  const st = stagesOf(run)[k];
+  const n = (st.keys || []).filter(Boolean).reduce((p, key) => p * Math.max(1, parseLevels(st.levels?.[key]).values.length), 1);
+  if (k === 0) return n;
+  const prev = carried(pkg, run, k - 1, cfg);
+  return prev ? prev.combos.length * n : null;
+}
+
+/**
+ * Tabela no formato da planilha: etapa 0 com 2 variáveis = linhas da 1ª × colunas da 2ª;
+ * etapa k > 0 = linhas = combinações vindas da etapa anterior, colunas = níveis das variáveis novas.
+ * cells[r][c] = { dp, v } (v = valor da métrica pedida; null sem resultado) ou null se o DP não existe.
+ */
+export function stageTable(pkg, run, k, metric) {
+  const st = stagesOf(run)[k], dps = stageDps(run, k);
+  const nk = (st.keys || []).filter(Boolean);
+  let rowKeys, colKeys;
+  if (k === 0) { rowKeys = nk.length > 1 ? [nk[0]] : []; colKeys = nk.length > 1 ? nk.slice(1) : nk; }
+  else { rowKeys = keysUpTo(run, k - 1).filter((key) => !nk.includes(key)); colKeys = nk; }
+  const tuple = (d, ks) => ks.map((key) => r6(d.inputs[key]));
+  const cmp = (a, b) => { for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] - b[i]; return 0; };
+  const rowsT = uniq(dps.map((d) => JSON.stringify(tuple(d, rowKeys)))).map((s) => JSON.parse(s)).sort(cmp);
+  const colsT = uniq(dps.map((d) => JSON.stringify(tuple(d, colKeys)))).map((s) => JSON.parse(s)).sort(cmp);
+  const cells = rowsT.map(() => colsT.map(() => null));
+  dps.forEach((d) => {
+    const r = rowsT.findIndex((t) => cmp(t, tuple(d, rowKeys)) === 0), c = colsT.findIndex((t) => cmp(t, tuple(d, colKeys)) === 0);
+    if (r >= 0 && c >= 0 && !cells[r][c]) cells[r][c] = { dp: d, v: metricOf(pkg, d, metric) };
   });
-  return { X, Y, cells, best: R.best };
+  return { rowKeys, colKeys, rows: rowsT, cols: colsT, cells };
 }
 
-/**
- * Região vizinha ao melhor (o "intervalo dos melhores valores" da planilha): DPs com pontuação
- * ≥ (1 − faixa%) · melhor, ligados ao melhor por níveis vizinhos (cada variável variada difere
- * no máximo 1 nível). Para cada variável variada: [mín, máx] da região e o centro.
- */
-export function goodRegion(pkg, run, cfg = altConfig(pkg)) {
-  const R = rankRun(pkg, run, cfg);
-  if (!R.best) return null;
-  const vv = variedVars(pkg, run), lim = R.best.s * (1 - (Number(cfg.band) || 0) / 100);
-  const idx = (c) => vv.map((v) => v.levels.indexOf(r6(c.dp.inputs[v.key])));
-  const cand = R.ranked.filter((c) => c.s >= lim).map((c) => ({ c, ix: idx(c) }));
-  const near = (a, b) => a.ix.every((x, k) => Math.abs(x - b.ix[k]) <= 1);
-  const good = [cand[0]], queue = [cand[0]], left = new Set(cand.slice(1));
-  while (queue.length) {
-    const a = queue.shift();
-    [...left].forEach((b) => { if (near(a, b)) { left.delete(b); good.push(b); queue.push(b); } });
-  }
-  const ranges = {};
-  vv.forEach((v) => {
-    const xs = good.map((g) => Number(g.c.dp.inputs[v.key]));
-    const mn = Math.min(...xs), mx = Math.max(...xs);
-    ranges[v.key] = { key: v.key, label: v.label, unit: v.unit, min: r6(mn), max: r6(mx), center: r6((mn + mx) / 2) };
-  });
-  return { good: good.map((g) => g.c), ids: new Set(good.map((g) => g.c.dp.id)), ranges, lim, best: R.best };
+/** Melhor DP de todas as etapas geradas (pelo critério). */
+export function overallBest(pkg, run, cfg = altConfig(run)) {
+  return rankDps(pkg, run.dps.filter((d) => d.stage != null), cfg.metric)[0] || null;
 }
 
-/** Valores fixos da próxima rodada: os do DP; no modo 'regiao', as variáveis variadas vão para o centro da região vizinha. */
-export function fixedFor(pkg, run, dp, cfg = altConfig(pkg)) {
-  const f = fixedFrom(pkg, dp);
-  if (cfg.fix === 'regiao') {
-    const g = goodRegion(pkg, run, cfg);
-    if (g) Object.values(g.ranges).forEach((r) => { f[r.key] = r.center; });
-  }
-  return f;
-}
-
-/** Rodadas da cadeia até esta (mais antiga primeiro), seguindo run.alt.fromRunId no pacote. */
-export function chainOf(pkg, run) {
-  const out = [], seen = new Set();
-  let r = run;
-  while (r && !seen.has(r.id)) { out.unshift(r); seen.add(r.id); r = r.alt?.fromRunId ? pkg.runs.find((x) => x.id === r.alt.fromRunId) : null; }
-  return out;
-}
-
-/**
- * Blocos sugeridos, na ordem da passada: para cada elemento posicionado n (com ref r):
- * AoA_r × AoA_n e depois Gap × Overlap do par. Corda fica de fora (pode ser escolhida à mão).
- */
-export function suggestedBlocks(pkg) {
-  const tp = topologyOf(pkg), vars = doeVariables(pkg), byKey = new Map(vars.map((v) => [v.key, v]));
-  const blocks = [];
-  pkg.config.elements.forEach((el, i) => {
-    const n = i + 1, pr = pairOf(pkg, n);
-    if (!pr) return;
-    const a = [keys.aoa(tp.refs[i] + 1), keys.aoa(n)].filter((k) => byKey.has(k));
-    if (a.length) blocks.push(a);
-    const g = (isRelGap(el) ? [keys.gapc(n), keys.overlapc(n)] : [keys.gap(n), keys.overlap(n)]).filter((k) => byKey.has(k));
-    if (g.length) blocks.push(g);
-  });
-  return blocks.map((ks) => ({ keys: ks, label: ks.map((k) => byKey.get(k).label).join(' × ') }));
-}
-
-/** Próximo bloco da passada depois do bloco variado nesta rodada (o primeiro, se não houver). */
-export function nextBlockIndex(pkg, run) {
-  const bl = suggestedBlocks(pkg);
-  if (!bl.length) return -1;
-  const varied = new Set(variedVars(pkg, run).map((v) => v.key));
-  const cur = bl.findIndex((b) => b.keys.length === varied.size && b.keys.every((k) => varied.has(k)));
-  return cur < 0 ? 0 : (cur + 1) % bl.length;
-}
-
-/** Passo padrão de uma variável que ainda não foi variada na cadeia. */
-export function defaultStep(v) {
-  const r = Math.abs(Number(v.ref)) || 0;
-  if (v.unit === '°') return 2;
-  if (v.unit === 'x/c') return 0.01;
-  if (/^chord_/.test(v.key)) return r6(Math.max(1, 0.05 * r));
-  if (v.unit === 'mm') return 2;
-  return r6(0.1 * r || 1);
-}
-
-const positiveOnly = (k) => /^(chord|Gap)_/.test(k) || /^gurney_(h|t)_/.test(k);
-
-/** n níveis centrados em c com passo s; n par vira ímpar para o centro ser testado (valores ≤ 0 descartados nas variáveis que não admitem). */
-export function levelsAround(key, c, s, n) {
-  const out = [];
-  if (n % 2 === 0) n += 1;
-  for (let i = 0; i < n; i++) out.push(r6(c + (i - (n - 1) / 2) * s));
-  return out.filter((x) => !positiveOnly(key) || x > 0);
-}
-
-/**
- * Proposta de níveis para uma variável na próxima rodada, centrada no valor fixo:
- *  - nunca variada na cadeia → nLevels níveis com o passo padrão;
- *  - variada antes, ótimo na borda → mesma malha (recentrada, estende a faixa);
- *  - variada antes, ótimo no interior → refino: 3 níveis com metade do passo.
- */
-export function proposeLevels(pkg, chain, key, center, cfg = altConfig(pkg)) {
-  const v = doeVariables(pkg).find((x) => x.key === key);
-  if (!v || !Number.isFinite(center)) return { values: [], why: 'sem valor de partida' };
-  for (let i = chain.length - 1; i >= 0; i--) {
-    const vv = variedVars(pkg, chain[i]).find((x) => x.key === key);
-    if (!vv || !vv.step) continue;
-    const b = rankRun(pkg, chain[i], cfg).best;
-    const e = b ? edges(pkg, chain[i], b.dp).find((x) => x.key === key) : null;
-    if (e?.edge) return { values: levelsAround(key, center, vv.step, Math.max(3, vv.levels.length)), why: `ótimo na borda (${e.edge === 'min' ? 'mínimo' : 'máximo'}) em "${chain[i].name}": faixa recentrada` };
-    return { values: levelsAround(key, center, r6(vv.step / 2), 3), why: `refino: metade do passo de "${chain[i].name}"` };
-  }
-  return { values: levelsAround(key, center, defaultStep(v), cfg.nLevels), why: 'primeira vez na cadeia: passo padrão' };
-}
-
-/** Melhora (%) do melhor desta rodada em relação ao melhor da rodada de origem. */
-export function improvement(pkg, run, cfg = altConfig(pkg)) {
-  const from = run.alt?.fromRunId ? pkg.runs.find((x) => x.id === run.alt.fromRunId) : null;
-  if (!from) return null;
-  const a = rankRun(pkg, from, cfg).best, b = rankRun(pkg, run, cfg).best;
-  if (!a || !b || !a.s) return null;
-  return { from, pct: (100 * (b.s - a.s)) / Math.abs(a.s), prev: a, cur: b };
-}
-
-/**
- * Cria a próxima rodada da cadeia: valores fixos = DP escolhido, níveis = os informados (fatorial),
- * DPs já gerados com as regras de validade e a verificação de geometria do pacote.
- * @returns {{run, removed, nGeo, error?}}
- */
-export function buildNextRun(pkg, run, dp, levels, { name, uid, cfg = altConfig(pkg), fixed: given = null } = {}) {
-  const fixed = given || fixedFrom(pkg, dp);
-  const b = rankRun(pkg, run, cfg).ranked.find((x) => x.dp === dp);
-  const nr = newRun(name || `Alternada ${(run.alt?.step || 1) + 1}`);
-  const pivotScaling = run.doe?.pivotScaling !== false;
-  nr.doe = { method: 'fatorial', levels: Object.fromEntries(Object.entries(levels).filter(([, v]) => String(v).trim())), base: fixed, pivotScaling };
-  const fromRegion = !!given && cfg.fix === 'regiao';
-  nr.alt = { step: (run.alt?.step || 1) + 1, fromRunId: run.id, fromRunName: run.name, fromDpId: dp.id, fromDpName: dp.name, fix: fromRegion ? 'regiao' : 'dp', metric: cfg.metric, goal: cfg.goal, value: b ? b.v : null };
-  nr.notes = `Otimização alternada, passo ${nr.alt.step}: valores fixos ${fromRegion ? `no centro da região vizinha ao ${dp.name}` : `do ${dp.name}`} de "${run.name}"${b ? ` (${cfg.metric} = ${r6(b.v)})` : ''}.`;
-  const base = { ...referenceInputs(pkg), ...fixed };
-  const rows = generateDesigns('fatorial', nr.doe.levels, base);
-  if (rows.length > LIMITS.max) return { run: null, removed: 0, nGeo: 0, error: `${rows.length} pontos excedem o limite.` };
-  const s = filterValidRows(pkg, rows, { geometry: true, pivotScaling });
-  if (!s.valid.length) return { run: null, removed: s.invalid.length, nGeo: 0, error: 'Todas as combinações são inválidas (regras de corda/AoA ou erro de geometria). Ajuste os níveis.' };
-  nr.dps = makeDesignPoints(pkg, s.valid, { pivotScaling, uid });
-  nr.status = 'em preparação';
-  if (!run.alt) run.alt = { step: 1 }; // marca o início da cadeia
-  return { run: nr, removed: s.invalid.length, nGeo: s.invalid.filter((x) => x.kind === 'geometria').length, invalid: s.invalid };
+/** O máximo da etapa caiu na borda da faixa de alguma variável nova? [{key, edge:'min'|'max'}] */
+export function stageEdges(run, k, bestDp) {
+  const st = stagesOf(run)[k], dps = stageDps(run, k);
+  return (st.keys || []).filter(Boolean).map((key) => {
+    const lv = levelsUsed(dps, [key])[key], x = r6(bestDp.inputs[key]);
+    return { key, edge: lv.length < 2 ? null : x <= lv[0] ? 'min' : x >= lv[lv.length - 1] ? 'max' : null };
+  }).filter((e) => e.edge);
 }

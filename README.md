@@ -140,17 +140,16 @@ Geometria → aba **Mapa de conflito**. Escolha 2 variáveis (ex.: Gap_2 × Over
 
 ## Otimização alternada
 
-Inputs / Design Points → cartão **Otimização alternada**, no método da planilha "Otimização Alternada": cada rodada é uma grade de **2 parâmetros** com os demais fixos.
+Inputs / Design Points → Planejamento → método **Otimização alternada** (ao lado de Fatorial completo, Um fator por vez e Manual), no formato da planilha "Otimização Alternada". A rodada é feita em **etapas**:
 
-1. Escolha a **melhor configuração** do pacote: maior |lift| (Lift_force), maior |Cl| ou maior |Cl|/Cd (sempre em módulo: a downforce sai negativa no Fluent).
-2. Com os resultados importados, o cartão mostra a **grade** do critério (linhas × colunas, como as tabelas da planilha), o **melhor DP** em destaque e a **região vizinha** em verde: DPs em níveis vizinhos ao melhor com |critério| a até a faixa % do melhor (padrão 2 %).
-3. **Valores fixos da próxima rodada**: o **centro da região vizinha** (o "valor intermediário" do intervalo dos melhores, como na planilha; ex.: AoA_MP de 6 a 8 → 7) ou os **valores exatos de um DP**. O cartão avisa quando o ótimo caiu na **borda** da faixa (o ótimo pode estar fora dela) e quando o ponto intermediário não foi simulado.
-4. **Próxima rodada**: outro par (a ordem da passada é AoA_1 × AoA_2 → Gap_1 × Overlap_1 → AoA_2 × AoA_3 → Gap_2 × Overlap_2; com o ótimo na borda o padrão é repetir o par) ou um par escolhido. Os níveis vêm propostos e são editáveis:
-   - parâmetro novo na cadeia: 5 níveis com passo padrão (2° para AoA, 2 mm para gap/overlap, 0,01 para x/c);
-   - ótimo no interior: refino entre os vizinhos, com 3 níveis e metade do passo;
-   - ótimo na borda: mesmo passo, faixa recentrada.
-5. **Criar próxima rodada** cria a rodada (fatorial 2D) com os valores fixos (selo "herdado" no Planejamento), aplica as regras de validade e a verificação de geometria, gera os DPs e a torna ativa. O Mapa de conflito usa esses valores fixos.
-6. O cartão mostra a **cadeia** de rodadas e a melhora em relação à rodada anterior; abaixo da tolerância (padrão 1 %), depois de percorrer todos os pares, a otimização convergiu.
+1. **Etapa 1**: 1–2 variáveis com seus níveis (ex.: AoA_1 × AoA_2, 5 níveis cada) → fatorial (25 DPs). Rode no Fluent e importe os resultados: a etapa vira uma **tabela** como a da planilha (linhas = variável 1, colunas = variável 2), com o **máximo** em vermelho e os **vizinhos** em verde.
+2. **+ Adicionar etapa**: entra outra variável (ex.: AoA_3, 5 níveis), cruzada só com as melhores combinações da etapa anterior: o **máximo e seus vizinhos** (um nível acima ou abaixo em cada variável; ex.: 9 combinações × 5 níveis = 45 DPs). A tabela da etapa tem linhas = combinações que vieram da etapa anterior e colunas = níveis da variável nova.
+3. E assim por diante (Gap, Overlap...). Cada etapa só pode ser gerada depois que a anterior tem resultados; regerar uma etapa substitui os DPs dela e das seguintes.
+
+- **Melhor resultado**: maior |lift| (Lift_force), maior |Cl| ou maior |Cl|/Cd (em módulo: a downforce sai negativa no Fluent). A tabela pode mostrar |lift|, Cl, Cd ou Cl/Cd.
+- **Seguem para a próxima etapa**: o máximo + todos os vizinhos, ou só os vizinhos a até uma faixa % do máximo.
+- As variáveis fora das etapas ficam no valor de referência. As regras de validade (corda/AoA) e a verificação de geometria valem em cada etapa.
+- Avisos: máximo na borda dos níveis (o ótimo pode estar fora da faixa), DPs sem resultado ("–"), dados de exemplo. Na tabela de DPs, o selo E1, E2... indica a etapa.
 
 ## Sugestões de chord, AoA, Gap e Overlap
 

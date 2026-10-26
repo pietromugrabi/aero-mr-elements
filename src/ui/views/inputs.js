@@ -9,7 +9,7 @@ import { parseCSV, toTSV } from '../../core/csv.js';
 import { detectMapping } from '../../core/outputs.js';
 import { inputsTable, csvOf, xlsxOf } from '../../core/export.js';
 import { runBase } from '../../core/alternada.js';
-import { altCard } from '../alt-card.js';
+import { altPlan } from '../alt-card.js';
 
 function groupedColumns(pkg) {
   const vars = doeVariables(pkg), der = derivedColumns(pkg);
@@ -69,14 +69,14 @@ export default function inputs(ctx) {
   const doe = run.doe;
   doe.levels = doe.levels || {};
   const vars = doeVariables(pkg);
-  const base = runBase(pkg, run); // referência do pacote + valores fixos herdados (otimização alternada)
-  const inherited = doe.base && Object.keys(doe.base).length ? doe.base : null;
+  const base = runBase(pkg, run);
+  const isAlt = doe.method === 'alternada', isGrid = doe.method === 'fatorial' || doe.method === 'oat';
   let refErr = null;
   try { withDerivedPivots(pkg, base, true); } catch (e) { refErr = e.message; }
   const count = countDesigns(doe.method, doe.levels, base);
   // DPs que violam as regras do pacote (flap com corda maior / AoA menor que o elemento anterior) não são gerados
   let split = null;
-  if (doe.method !== 'manual' && count <= LIMITS.max) { try { split = filterValidRows(pkg, generateDesigns(doe.method, doe.levels, base)); } catch (e) { split = null; } }
+  if (isGrid && count <= LIMITS.max) { try { split = filterValidRows(pkg, generateDesigns(doe.method, doe.levels, base)); } catch (e) { split = null; } }
   const nValid = split ? split.valid.length : count, nInvalid = split ? split.invalid.length : 0;
   const rules = doeRules(pkg);
   const setRule = (k, v) => store.update(() => { pkg.config.doeRules = { ...doeRules(pkg), [k]: v }; }, ['DOE', pkg.name, `regra de validade ${k}`, String(v)]);
@@ -87,8 +87,8 @@ export default function inputs(ctx) {
     const pl = parseLevels(doe.levels[v.key]);
     const inp = h('input', { type: 'text', value: doe.levels[v.key] || '', placeholder: 'ex.: 14; 18; 22  ou  10:2:20', style: { width: '100%' }, dataset: { k: `lv_${v.key}` } });
     inp.addEventListener('change', () => store.update(() => { doe.levels[v.key] = inp.value; }, ['DOE', run.name, `níveis de ${v.label}`, inp.value]));
-    return h('tr', null, h('td', null, v.group), h('td', null, h('code', null, v.label), v.note ? h('small', { class: 'muted' }, ` (${v.note})`) : null), h('td', { class: 'num' }, inherited && inherited[v.key] != null ? h('span', { title: `fixo herdado do ${run.alt?.fromDpName || 'DP de origem'} (referência do pacote: ${fmt(Number(v.ref), 3)})` }, `${fmt(Number(inherited[v.key]), 3)} ${v.unit} `, badge('herdado', 'info')) : v.ref == null ? badge('sem ref.', 'err') : `${fmt(Number(v.ref), 3)} ${v.unit}`),
-      h('td', { style: { minWidth: '220px' } }, inp), h('td', null, pl.error ? badge(pl.error, 'err') : pl.values.length ? `${pl.values.length} nível(is): ${pl.values.map((x) => fmt(x, 3)).join('; ')} ${v.unit}` : h('span', { class: 'muted' }, inherited && inherited[v.key] != null ? 'fixo no valor herdado' : 'fixo no valor de referência')));
+    return h('tr', null, h('td', null, v.group), h('td', null, h('code', null, v.label), v.note ? h('small', { class: 'muted' }, ` (${v.note})`) : null), h('td', { class: 'num' }, v.ref == null ? badge('sem ref.', 'err') : `${fmt(Number(v.ref), 3)} ${v.unit}`),
+      h('td', { style: { minWidth: '220px' } }, inp), h('td', null, pl.error ? badge(pl.error, 'err') : pl.values.length ? `${pl.values.length} nível(is): ${pl.values.map((x) => fmt(x, 3)).join('; ')} ${v.unit}` : h('span', { class: 'muted' }, 'fixo no valor de referência')));
   });
   const countMsg = doe.method === 'manual' ? { level: 'info', msg: 'Modo manual: adicione, edite ou cole linhas na tabela abaixo.' }
     : count > LIMITS.max ? { level: 'erro', msg: `${count} pontos excedem o limite de ${LIMITS.max}. Reduza os níveis.` }
@@ -119,19 +119,19 @@ export default function inputs(ctx) {
 
   const plan = card('Planejamento (níveis por variável)',
     h('div', { class: 'row', style: { marginBottom: '10px' } }, h('span', { class: 'lbl' }, 'Método:'),
-      seg([['fatorial', 'Fatorial completo'], ['oat', 'Um fator por vez'], ['manual', 'Manual']], doe.method, (v) => store.update(() => { doe.method = v; }, ['DOE', run.name, 'método', v])),
+      seg([['fatorial', 'Fatorial completo'], ['oat', 'Um fator por vez'], ['alternada', 'Otimização alternada'], ['manual', 'Manual']], doe.method, (v) => store.update(() => { doe.method = v; if (v === 'alternada' && !doe.stages?.length) doe.stages = [{ keys: [], levels: {} }]; }, ['DOE', run.name, 'método', v])),
       checkField({ label: 'Pivôs acompanham a corda (pivot_n = pivot_ref/chord_ref·chord_n)', checked: doe.pivotScaling !== false, onChange: (v) => store.update(() => { doe.pivotScaling = v; run.dps.forEach((d) => { d.inputs = withDerivedPivots(pkg, d.inputs, v); }); }, ['DOE', run.name, 'escalonamento do pivô', String(v)]) })),
     h('div', { class: 'row', style: { marginBottom: '10px' } }, h('span', { class: 'lbl' }, 'Não gerar DPs inválidos:'),
       checkField({ label: 'flap com corda maior que o elemento anterior (chord_n > chord_(n−1))', checked: rules.chord, onChange: (v) => setRule('chord', v) }),
       checkField({ label: 'flap com AoA menor que o elemento anterior (AoA_n < AoA_(n−1))', checked: rules.aoa, onChange: (v) => setRule('aoa', v) }),
       checkField({ label: 'com erro de geometria (elementos se atravessando, auto-interseção, cota inválida) — verificado ao gerar', checked: rules.geom, onChange: (v) => setRule('geom', v) })),
     refErr ? msgs([{ level: 'erro', msg: `${refErr} Corrija os valores de referência na Geometria.` }]) : null,
-    inherited ? h('div', { class: 'row', style: { marginBottom: '8px' } }, msgs([{ level: 'info', msg: `Otimização alternada: as variáveis sem níveis ficam fixas nos valores do ${run.alt?.fromDpName || 'DP de origem'} de "${run.alt?.fromRunName || 'rodada anterior'}" (coluna Referência, selo "herdado"), não na referência do pacote.` }]),
-      h('button', { class: 'small', onclick: async () => { if (await confirmBox('Usar referência do pacote', 'As variáveis sem níveis voltam aos valores de referência da Geometria. Os DPs já gerados não mudam.', 'Usar referência')) store.update(() => { delete doe.base; }, ['DOE', run.name, 'valores herdados removidos']); } }, 'Usar referência do pacote')) : null,
-    doe.method !== 'manual' ? h('div', { class: 'table-wrap' }, h('table', null, h('thead', null, h('tr', null, ['Grupo', 'Variável', 'Referência', 'Níveis', 'Interpretação'].map((t) => h('th', null, t)))), h('tbody', null, levelRows))) : null,
-    doe.method !== 'manual' ? h('p', { class: 'muted' }, 'Separe níveis por ";" ou espaço (vírgula decimal aceita: "2,5; 3,5"), ou use início:passo:fim. Variáveis sem níveis ficam no valor de referência. Um fator por vez: o ponto base + cada variável variando sozinha.') : null,
-    msgs([countMsg, ...(invalidMsg && doe.method !== 'manual' ? [invalidMsg] : [])]),
-    doe.method !== 'manual' ? h('div', { class: 'row' }, h('button', { class: 'primary', disabled: count > LIMITS.max || null, onclick: () => generate(false) }, `Gerar ${nValid} DP(s) (substituir)`), h('button', { disabled: count > LIMITS.max || null, onclick: () => generate(true) }, 'Gerar e acrescentar')) : null);
+    isAlt ? (doe.stages?.length ? altPlan(ctx, pkg, run, { base, pivotScaling: doe.pivotScaling !== false })
+      : h('button', { class: 'primary', onclick: () => store.update(() => { doe.stages = [{ keys: [], levels: {} }]; }, ['DOE', run.name, 'otimização alternada iniciada']) }, 'Começar etapa 1')) : null,
+    isGrid ? h('div', { class: 'table-wrap' }, h('table', null, h('thead', null, h('tr', null, ['Grupo', 'Variável', 'Referência', 'Níveis', 'Interpretação'].map((t) => h('th', null, t)))), h('tbody', null, levelRows))) : null,
+    isGrid ? h('p', { class: 'muted' }, 'Separe níveis por ";" ou espaço (vírgula decimal aceita: "2,5; 3,5"), ou use início:passo:fim. Variáveis sem níveis ficam no valor de referência. Um fator por vez: o ponto base + cada variável variando sozinha.') : null,
+    isAlt ? null : msgs([countMsg, ...(invalidMsg && isGrid ? [invalidMsg] : [])]),
+    isGrid ? h('div', { class: 'row' }, h('button', { class: 'primary', disabled: count > LIMITS.max || null, onclick: () => generate(false) }, `Gerar ${nValid} DP(s) (substituir)`), h('button', { disabled: count > LIMITS.max || null, onclick: () => generate(true) }, 'Gerar e acrescentar')) : null);
 
   // --- tabela
   const editKeys = new Set(vars.map((v) => v.key));
@@ -177,7 +177,7 @@ export default function inputs(ctx) {
     const c = chk?.get(dp.id);
     return h('tr', { class: (dups.has(idx) ? 'dup ' : '') + (sel.has(dp.id) ? 'sel' : ''), title: dups.has(idx) ? `Duplicado de ${run.dps[dups.get(idx)].name}` : null },
       h('td', null, h('input', { type: 'checkbox', checked: sel.has(dp.id), onchange: (e) => { e.target.checked ? sel.add(dp.id) : sel.delete(dp.id); } })),
-      h('td', { style: { whiteSpace: 'nowrap' } }, dp.name, dups.has(idx) ? ' ' : null, dups.has(idx) ? badge('duplicado', 'warn') : null), h('td', null, dp.status),
+      h('td', { style: { whiteSpace: 'nowrap' } }, dp.name, dp.stage != null ? ' ' : null, dp.stage != null ? h('span', { title: `etapa ${dp.stage + 1} da otimização alternada` }, badge(`E${dp.stage + 1}`, 'info')) : null, dups.has(idx) ? ' ' : null, dups.has(idx) ? badge('duplicado', 'warn') : null), h('td', null, dp.status),
       allCols.map((col) => editCell(dp, col)),
       h('td', null, c ? h('span', { title: c.msgs.join('\n') }, badge(c.level === 'ok' ? 'OK' : c.level === 'erro' ? `erro (${c.msgs.length})` : `aviso (${c.msgs.length})`, c.level === 'ok' ? 'ok' : c.level === 'erro' ? 'err' : 'warn')) : h('span', { class: 'muted' }, '—')),
       h('td', null, dp.outputs?.raw ? badge(dp.outputs.isExample ? 'exemplo' : dp.outputsStale ? 'entrada alterada!' : 'sim', dp.outputs.isExample ? 'example' : dp.outputsStale ? 'warn' : 'ok') : ''));
@@ -208,5 +208,5 @@ export default function inputs(ctx) {
     run.dps.length ? h('div', { class: 'table-wrap tall' }, h('table', null, thead, tbody)) : h('div', { class: 'empty' }, 'Nenhum DP. Defina níveis e gere, adicione linhas ou cole de uma planilha.'),
     shown.length > limit ? h('button', { class: 'small', onclick: () => { ui.limit = limit + 500; ctx.rerender(); } }, `Mostrar mais (${shown.length - limit} ocultos)`) : null,
     h('p', { class: 'muted' }, `IDs: projeto "${prj.name}" › pacote "${pkg.name}" › rodada "${run.name}" (incluídos nas exportações). Colunas cinza = pivôs derivados da corda (referências inalteradas).`));
-  return h('div', null, pageHead(`Inputs / Design Points — ${run.name}`, 'Tabela de entradas por DP, agrupada por elemento.'), plan, altCard(ctx, pkg, run), tableCard);
+  return h('div', null, pageHead(`Inputs / Design Points — ${run.name}`, 'Tabela de entradas por DP, agrupada por elemento.'), plan, tableCard);
 }
