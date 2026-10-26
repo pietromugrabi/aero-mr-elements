@@ -7,6 +7,7 @@ import { metricList } from '../../core/outputs.js';
 import { toCSV } from '../../core/csv.js';
 import { parseNum } from '../../core/num.js';
 import { uid, clone } from '../../core/model.js';
+import { doeVariables, derivedColumns } from '../../core/doe.js';
 
 const TYPES = [['xy', 'Curvas XY'], ['scatter', 'Dispersão'], ['heatmap', 'Mapa de calor'], ['surface', 'Superfície de resposta'], ['ranking', 'Ranking'], ['matrix', 'Matriz de comparação']];
 
@@ -19,8 +20,16 @@ function varsOf(recs, project) {
   return [...keys].sort((a, b) => order(a) - order(b));
 }
 
-const unitOf = (k, mets) => { const m = mets.find((x) => x.key === k); if (m) return m.unit === '—' ? '' : ` [${m.unit}]`; if (/^AoA/.test(k)) return ' [°]'; if (k === 'Uinf') return ' [m/s]'; return k ? ' [mm]' : ''; };
-const labelOf = (k, mets) => (mets.find((x) => x.key === k)?.label || k) + unitOf(k, mets);
+// Nomes de exibição das entradas (Gap_k = entre o elemento k e o k+1), a partir das variáveis de cada pacote
+let IN_LABEL = new Map();
+function inputLabels(project) {
+  const m = new Map();
+  (project.packages || []).forEach((k) => [...doeVariables(k), ...derivedColumns(k)].forEach((v) => { if (!m.has(v.key)) m.set(v.key, v.label); }));
+  return m;
+}
+const nameOf = (k) => IN_LABEL.get(k) || k;
+const unitOf = (k, mets) => { const m = mets.find((x) => x.key === k); if (m) return m.unit === '—' ? '' : ` [${m.unit}]`; if (/^AoA/.test(k)) return ' [°]'; if (k === 'Uinf') return ' [m/s]'; if (/_c$/.test(k)) return ' [x/c]'; return k ? ' [mm]' : ''; };
+const labelOf = (k, mets) => (mets.find((x) => x.key === k)?.label || nameOf(k)) + unitOf(k, mets);
 
 function preset(cfg, name, vars, recs) {
   const vary = varyingInputs(recs);
@@ -53,6 +62,7 @@ export default function graficos(ctx) {
   const nMax = Math.max(1, ...prj.packages.map((k) => k.config.elements.length));
   const mets = metricList(nMax);
   const all = collectRecords(prj, {});
+  IN_LABEL = inputLabels(prj);
   const vars = varsOf(all, prj);
   if (!cfg.x) cfg.x = vars.find((v) => /^AoA_2/.test(v)) || vars[0];
   const recs = filterRecords(all, cfg.filters);
@@ -68,7 +78,7 @@ export default function graficos(ctx) {
   const rangeInput = (k) => {
     const r = f.ranges[k] || [null, null];
     const mk = (j, ph) => { const i = h('input', { type: 'text', placeholder: ph, value: r[j] ?? '', style: { width: '70px' }, dataset: { k: `rg_${k}_${j}` } }); i.addEventListener('change', () => { const v = i.value.trim() ? parseNum(i.value) : null; f.ranges[k] = f.ranges[k] || [null, null]; f.ranges[k][j] = Number.isFinite(v) ? v : null; rr(); }); return i; };
-    return h('div', { class: 'row', style: { flexWrap: 'nowrap' } }, h('code', { style: { width: '92px' } }, k), mk(0, 'mín'), mk(1, 'máx'));
+    return h('div', { class: 'row', style: { flexWrap: 'nowrap' } }, h('code', { style: { width: '92px' } }, nameOf(k)), mk(0, 'mín'), mk(1, 'máx'));
   };
   const filterVars = vars.filter((v) => /^(AoA|Gap|Overlap)_|^Uinf$|^chord_/.test(v));
   const yList = cfg.type === 'heatmap' || cfg.type === 'surface' ? null : cfg.type === 'ranking' || cfg.type === 'matrix' ? null : h('div', { class: 'field' }, h('label', null, 'Y (um gráfico por métrica — nunca dois eixos)'),
@@ -112,7 +122,7 @@ export default function graficos(ctx) {
   else if (cfg.type === 'xy' || cfg.type === 'scatter') {
     if (!cfg.ys.length) out.push(h('div', { class: 'empty' }, 'Escolha ao menos uma métrica Y.'));
     cfg.ys.forEach((y) => {
-      const { series, warnings } = buildSeries(recs, { x: cfg.x, y, groupBy: cfg.groupBy || null, perElement: cfg.perElement, includeTotal: cfg.includeTotal });
+      const { series, warnings } = buildSeries(recs, { x: cfg.x, y, groupBy: cfg.groupBy || null, perElement: cfg.perElement, includeTotal: cfg.includeTotal, nameOf });
       warnings.forEach((w) => { if (!warn.includes(w)) warn.push(w); });
       if (series.length > 8) warn.push(`${series.length} séries: só as 8 primeiras têm cor própria (as demais em cinza). Filtre ou agrupe de outra forma.`);
       series.forEach((s) => s.points.forEach((p) => { p.label = `${p.rec.dpName} — ${p.rec.pkgName} / ${p.rec.runName}`; csvRows.push([s.name, cfg.x, p.x, s.yKey, p.y, p.rec.dpName, p.rec.pkgName, p.rec.runName, p.rec.isExample ? 'exemplo' : '']); }));
@@ -129,7 +139,7 @@ export default function graficos(ctx) {
       const pts = recs.map((r) => ({ x: valueOf(r, cfg.x), y: valueOf(r, yk), z: valueOf(r, cfg.z), label: r.dpName })).filter((p) => [p.x, p.y, p.z].every(Number.isFinite));
       const fit = fitResponseSurface(pts);
       const vary = varyingInputs(recs, [cfg.x, yk]);
-      if (vary.length) warn.push(`Os DPs também diferem em ${vary.join(', ')}: a superfície mistura condições. Filtre essas variáveis.`);
+      if (vary.length) warn.push(`Os DPs também diferem em ${vary.map(nameOf).join(', ')}: a superfície mistura condições. Filtre essas variáveis.`);
       warn.push(...refWarnings(recs));
       if (!fit.ok) out.push(card('Superfície de resposta', msgs([{ level: 'aviso', msg: `Dados insuficientes: ${fit.reason}` }])));
       else {
@@ -147,7 +157,7 @@ export default function graficos(ctx) {
     warn.push(...refWarnings(recs));
     rk.forEach((e) => csvRows.push([e.rec.dpName, e.rec.pkgName, e.rec.runName, cfg.metric, e.v]));
     out.push(card(`Ranking — ${mets.find((m) => m.key === cfg.metric)?.label}`, barChart(rk.map((e) => ({ label: `${e.rec.dpName} · ${e.rec.runName}`, value: e.v, detail: `${e.rec.pkgName}${e.rec.isExample ? ' (exemplo)' : ''}` })), { metric: cfg.metric, name: `ranking_${cfg.metric}` }),
-      table([{ label: '#', get: (_, i) => i + 1 }, { label: 'DP', get: (e) => e.rec.dpName }, { label: 'Pacote / rodada', get: (e) => `${e.rec.pkgName} / ${e.rec.runName}` }, { label: 'Valor', num: true, get: (e) => fv(e.v, 5) }, { label: 'Entradas', get: (e) => varyingInputs(recs).map((k) => `${k}=${fv(Number(e.rec.inputs[k]), 4)}`).join(', ') }], rk.slice(0, 10))));
+      table([{ label: '#', get: (_, i) => i + 1 }, { label: 'DP', get: (e) => e.rec.dpName }, { label: 'Pacote / rodada', get: (e) => `${e.rec.pkgName} / ${e.rec.runName}` }, { label: 'Valor', num: true, get: (e) => fv(e.v, 5) }, { label: 'Entradas', get: (e) => varyingInputs(recs).map((k) => `${nameOf(k)}=${fv(Number(e.rec.inputs[k]), 4)}`).join(', ') }], rk.slice(0, 10))));
   } else if (cfg.type === 'matrix') {
     const by = cfg.groupBy === 'pacote' ? 'pkgName' : 'runName';
     const groups = [...new Set(recs.map((r) => (by === 'runName' ? `${r.pkgName} / ${r.runName}` : r.pkgName)))];

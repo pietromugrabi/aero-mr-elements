@@ -4,7 +4,7 @@ import { collectRecords, ranking, valueOf, varyingInputs } from '../../core/char
 import { metricList } from '../../core/outputs.js';
 import { fmt } from '../../core/num.js';
 import { resolveTopology } from '../../core/assembly.js';
-import { pairOf, gurneyConfigured } from '../../core/wing.js';
+import { pairOf, gurneyConfigured, pairName } from '../../core/wing.js';
 
 export default function comparacao(ctx) {
   const miss = needs(['project'], ctx); if (miss) return miss;
@@ -39,7 +39,7 @@ export default function comparacao(ctx) {
     ['Cordas ref. [mm]', (it) => els(it.pkg, (e) => fmt(Number(e.chord_ref), 1))],
     ['AoA ref. [°]', (it) => els(it.pkg, (e) => fmt(Number(e.aoa_ref), 1))],
     ['Tipos (ref.)', (it) => { const tp = resolveTopology(it.pkg.config.elements); return tp.kinds.map((k, i) => `${i + 1}: ${k}${tp.refs[i] != null ? ` → ${tp.refs[i] + 1}` : ''}`).join(' · '); }],
-    ['Gap / Overlap ref. [mm]', (it) => it.pkg.config.elements.map((e, i) => (pairOf(it.pkg, i + 1) ? `el. ${i + 1}: ${fmt(Number(e.gap_ref), 2)} / ${fmt(Number(e.overlap_ref), 2)}` : null)).filter(Boolean).join(' · ') || '—'],
+    ['Gap / Overlap ref. [mm]', (it) => it.pkg.config.elements.map((e, i) => (pairOf(it.pkg, i + 1) ? `${pairName(it.pkg, i + 1, 'Gap')} / ${pairName(it.pkg, i + 1, 'Overlap')}: ${fmt(Number(e.gap_ref), 2)} / ${fmt(Number(e.overlap_ref), 2)}` : null)).filter(Boolean).join(' · ') || '—'],
     ['Gurney', (it) => it.pkg.config.elements.map((e, i) => (e.gurney?.enabled || gurneyConfigured(e) ? `el. ${i + 1}: ${e.gurney.enabled ? 'ligado' : 'desligado na ref.'}, h=${e.gurney.h} t=${e.gurney.t} pos=${e.gurney.pos ?? 0} mm, ${e.gurney.side === 'succao' ? 'sucção' : 'pressão'}` : null)).filter(Boolean).join('; ') || 'não'],
     ['Raio do BF', (it) => els(it.pkg, (e) => (e.te?.enabled ? `${e.te.value} ${e.te.mode === 'mm' ? 'mm' : '% c'}` : 'agudo'))],
     ['Convenção de montagem', (it) => `${it.pkg.config.conventions.assemblyMode}, gap ${it.pkg.config.conventions.gapDef}/${it.pkg.config.conventions.gapAxes}`],

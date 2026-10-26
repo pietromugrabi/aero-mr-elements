@@ -40,11 +40,15 @@ export function aliasMap(pkg) {
     put(`lift_el_${n}`, elName(nm.liftEl, n), `lift_el${n}`, `lift_el_${n}`, `lift_element_${n}`, `lift_element${n}`, `lift${n}`, `lift_elemento_${n}`);
     put(`drag_el_${n}`, elName(nm.dragEl, n), `drag_el${n}`, `drag_el_${n}`, `drag_element_${n}`, `drag_element${n}`, `drag${n}`, `drag_elemento_${n}`);
   });
-  [...doeVariables(pkg), ...derivedColumns(pkg)].forEach((v) => {
+  const ins = [...doeVariables(pkg), ...derivedColumns(pkg)];
+  ins.forEach((v) => {
     put(`in:${v.key}`, v.key);
     const ds = dsName(v.key, pkg);
     if (ds) put(`in:${v.key}`, ds);
   });
+  // o nome exibido (Gap_k = entre os elementos k e k+1) vale mais que a chave interna: as planilhas
+  // exportadas pelo app usam o nome exibido no cabeçalho
+  ins.forEach((v) => put(`in:${v.key}`, v.label));
   put('in:Uinf', nm.uinf, 'uinf', 'vel_ref', 'velocity', 'velocidade', 'u_inf');
   return m;
 }

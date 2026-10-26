@@ -82,7 +82,10 @@ ZIP/XLSX, relatório Excel com gráficos, slat, Gurney parametrizado e migraçã
    referência" com as cotas DS_ padrão).
 3. **Geometria → Elementos e .dat**: carregue um `.dat` por elemento (há `samples/S1223.dat` e
    `samples/NACA23012.dat`), informe `chord_ref_n`, `AoA_ref_n`, `Gap_ref_n`, `Overlap_ref_n`,
-   `pivot_off_ref_n`, `pivot_dTE_ref_n` e, se houver, o Gurney (h, t). Em 3D informe a envergadura
+   `pivot_off_ref_n`, `pivot_dTE_ref_n` e, se houver, o Gurney (h, t). **Gap_n e Overlap_n são
+   entre o elemento n e o elemento n+1** (Gap_1 = entre os elementos 1 e 2, nome DS_ `DS_gap12`);
+   o campo fica no cartão do elemento n+1, que é o que se move. Pares não consecutivos (slat,
+   upperflap) usam os dois números: `Gap_41`, `Gap_14`. Em 3D informe a envergadura
    (o app nunca a estima).
 4. **Geometria → Bordo de fuga**: raio em % da corda ou mm, com pré-visualização e validação. O
    contorno original fica guardado; desmarcar a opção reverte.
@@ -113,7 +116,7 @@ ZIP/XLSX, relatório Excel com gráficos, slat, Gurney parametrizado e migraçã
 
 ## Gap/Overlap em fração da corda
 
-Em Geometria, cada elemento escolhe **Gap / Overlap em**: mm ou **fração da corda (x/c)**. Em fração, informe por exemplo `Gap_ref_2 / chord_1 = 0,01` (1 % da corda) e escolha a corda base: a do elemento de referência (padrão), a do próprio elemento ou a do principal. O app converte para mm (`Gap_2 = Gap_2/c · chord_base`) na montagem, nas cotas DS_ e nas exportações. No DOE, a variável passa a ser `Gap_2/c` e o `Gap_2` em mm vira coluna derivada: se a corda variar, o gap acompanha.
+Em Geometria, cada elemento escolhe **Gap / Overlap em**: mm ou **fração da corda (x/c)**. Em fração, informe por exemplo `Gap_ref_1 / chord_1 = 0,01` (1 % da corda) e escolha a corda base: a do elemento de referência (padrão), a do próprio elemento ou a do principal. O app converte para mm (`Gap_1 = Gap_1/c · chord_base`) na montagem, nas cotas DS_ e nas exportações. No DOE, a variável passa a ser `Gap_1/c` e o `Gap_1` em mm vira coluna derivada: se a corda variar, o gap acompanha.
 
 ## DPs inválidos
 

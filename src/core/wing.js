@@ -76,6 +76,18 @@ export function pairOf(pkg, n) {
   return { kind: 'flap', a: r, b: n };
 }
 
+/**
+ * Nome de exibição de Gap/Overlap/Stagger do elemento n (1-based), pelo par de montante para jusante:
+ * Gap_k = entre o elemento k e o k+1 (ex.: flap 2 atrás do 1 → Gap_1). Pares não consecutivos
+ * (slat, upperflap, ref escolhida) usam os dois números: Gap_41, Gap_14.
+ * Só muda o NOME mostrado; a chave interna continua Gap_n (n = elemento posicionado).
+ */
+export function pairName(pkg, n, what = 'Gap') {
+  const pr = pairOf(pkg, n);
+  if (!pr) return `${what}_${n}`;
+  return `${what}_${pr.b === pr.a + 1 ? pr.a : `${pr.a}${pr.b}`}`;
+}
+
 /** Gurney com geometria definida (h e t > 0): pode ser ligado/desligado por DP. */
 export const gurneyConfigured = (el) => !!el.gurney && Number(el.gurney.h) > 0 && Number(el.gurney.t) > 0;
 

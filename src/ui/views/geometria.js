@@ -4,7 +4,7 @@ import { wingOf, needs, swatch, pageHead } from '../common.js';
 import { geomPlot } from '../plots.js';
 import { setElementCount, syncDependentLists, addSlat, addUpperflap } from '../../core/model.js';
 import { resolveTopology } from '../../core/assembly.js';
-import { pairOf, gurneyConfigured, isRelGap, gapBaseIndex } from '../../core/wing.js';
+import { pairOf, gurneyConfigured, isRelGap, gapBaseIndex, pairName } from '../../core/wing.js';
 import { applyReferenceStudy } from '../../core/demo.js';
 import { S1223_DAT, NACA23012_DAT } from '../../core/samples-data.js';
 import { describeTransform, directions, planeAxes, toPlane } from '../../core/transform.js';
@@ -105,7 +105,10 @@ function gurneyBlock(pkg, i, w) {
 /** Campos de Gap/Overlap: em mm ou em fração da corda de um elemento base (Gap = Gap/c · chord_base). */
 function gapFields(pkg, i, dsOv, gapHint, ovHint) {
   const el = pkg.config.elements[i], n = i + 1, rel = isRelGap(el);
-  const ovName = dsOv === 'stagger' ? `Stagger_ref_${n} (Overlap_${n})` : `Overlap_ref_${n}`;
+  // nomes pelo par: Gap_k = entre o elemento k e o k+1 (o valor fica guardado no elemento posicionado)
+  const asRef = (nm) => nm.replace('_', '_ref_');
+  const G = asRef(pairName(pkg, n, 'Gap')), O = asRef(pairName(pkg, n, 'Overlap'));
+  const ovName = dsOv === 'stagger' ? `${asRef(pairName(pkg, n, 'Stagger'))} (${pairName(pkg, n, 'Overlap')})` : O;
   const b = gapBaseIndex(pkg, i), cb = Number(pkg.config.elements[b]?.chord_ref);
   const unitSel = selectField({ label: 'Gap / Overlap em', value: rel ? 'corda' : 'mm', options: [['mm', 'mm'], ['corda', 'Fração da corda (x/c)']],
     onChange: (v) => store.update(() => {
@@ -118,15 +121,15 @@ function gapFields(pkg, i, dsOv, gapHint, ovHint) {
     }, ['geometria', `${pkg.name} / elemento ${n}`, 'unidade de gap/overlap', v]) });
   if (!rel) {
     return [unitSel,
-      numField({ label: `Gap_ref_${n}`, unit: 'mm', value: el.gap_ref, required: true, key: `g${i}`, onChange: (v) => setEl(pkg, i, 'gap_ref', v, `Gap_ref_${n}`), hint: gapHint }),
-      numField({ label: ovName, unit: 'mm', value: el.overlap_ref, required: true, key: `o${i}`, onChange: (v) => setEl(pkg, i, 'overlap_ref', v, `Overlap_ref_${n}`), hint: ovHint })];
+      numField({ label: G, unit: 'mm', value: el.gap_ref, required: true, key: `g${i}`, onChange: (v) => setEl(pkg, i, 'gap_ref', v, G), hint: gapHint }),
+      numField({ label: ovName, unit: 'mm', value: el.overlap_ref, required: true, key: `o${i}`, onChange: (v) => setEl(pkg, i, 'overlap_ref', v, O), hint: ovHint })];
   }
   const tp = resolveTopology(pkg.config.elements), r = tp.refs[i], p = Math.max(0, tp.kinds.indexOf('principal'));
   const mmHint = (f, base) => (cb > 0 && Number.isFinite(Number(f)) && f !== null ? `= ${fmt(f * cb, 3)} mm (${fmt(100 * f, 3)} % de chord_${b + 1} = ${fmt(cb, 1)} mm). ${base}` : base);
   return [unitSel,
     selectField({ label: 'Corda de referência', value: el.gapBase || 'ref', options: [['ref', `chord_${r + 1} (elemento de referência)`], ['proprio', `chord_${n} (este elemento)`], ['principal', `chord_${p + 1} (principal)`]], onChange: (v) => setEl(pkg, i, 'gapBase', v, 'corda base do gap/overlap') }),
-    numField({ label: `Gap_ref_${n} / chord_${b + 1}`, unit: 'x/c', value: el.gapc_ref, required: true, key: `gc${i}`, onChange: (v) => setEl(pkg, i, 'gapc_ref', v, `Gap_ref_${n}/c`), hint: mmHint(el.gapc_ref, gapHint) }),
-    numField({ label: `${ovName} / chord_${b + 1}`, unit: 'x/c', value: el.overlapc_ref, required: true, key: `oc${i}`, onChange: (v) => setEl(pkg, i, 'overlapc_ref', v, `Overlap_ref_${n}/c`), hint: mmHint(el.overlapc_ref, ovHint) })];
+    numField({ label: `${G} / chord_${b + 1}`, unit: 'x/c', value: el.gapc_ref, required: true, key: `gc${i}`, onChange: (v) => setEl(pkg, i, 'gapc_ref', v, `${G}/c`), hint: mmHint(el.gapc_ref, gapHint) }),
+    numField({ label: `${ovName} / chord_${b + 1}`, unit: 'x/c', value: el.overlapc_ref, required: true, key: `oc${i}`, onChange: (v) => setEl(pkg, i, 'overlapc_ref', v, `${O}/c`), hint: mmHint(el.overlapc_ref, ovHint) })];
 }
 
 function elementCard(pkg, i, w) {
@@ -268,8 +271,8 @@ function liveControls(pkg, plotBox, measBox, plot) {
     };
     return h('div', { class: 'el-card' }, h('h3', null, swatch(i), `Elemento ${n}`),
       mk('aoa_ref', `AoA_${n}`, -45, 60, 0.5, '°'),
-      pairOf(pkg, n) ? (isRelGap(el) ? mk('gapc_ref', `Gap_${n}/c`, 0.001, 0.15, 0.001, 'x/c') : mk('gap_ref', `Gap_${n}`, 0.1, 25, 0.1, 'mm')) : null,
-      pairOf(pkg, n) ? (isRelGap(el) ? mk('overlapc_ref', `Overlap_${n}/c`, 0.001, 0.15, 0.001, 'x/c') : mk('overlap_ref', `Overlap_${n}`, 0.1, 20, 0.1, 'mm')) : null,
+      pairOf(pkg, n) ? (isRelGap(el) ? mk('gapc_ref', `${pairName(pkg, n, 'Gap')}/c`, 0.001, 0.15, 0.001, 'x/c') : mk('gap_ref', pairName(pkg, n, 'Gap'), 0.1, 25, 0.1, 'mm')) : null,
+      pairOf(pkg, n) ? (isRelGap(el) ? mk('overlapc_ref', `${pairName(pkg, n, 'Overlap')}/c`, 0.001, 0.15, 0.001, 'x/c') : mk('overlap_ref', pairName(pkg, n, 'Overlap'), 0.1, 20, 0.1, 'mm')) : null,
       mk('chord_ref', `chord_${n}`, 10, 400, 1, 'mm'));
   });
   void plotBox;
@@ -390,7 +393,7 @@ function setRefFromKey(pkg, key, v) {
 
 function conflictTab(pkg, ctx) {
   const vars = conflictVariables(pkg);
-  if (vars.length < 2) return card('Mapa de conflito', msgs([{ level: 'aviso', msg: 'São necessárias pelo menos 2 variáveis (ex.: Gap_2 e Overlap_2): adicione um flap com valores de referência.' }]));
+  if (vars.length < 2) return card('Mapa de conflito', msgs([{ level: 'aviso', msg: 'São necessárias pelo menos 2 variáveis (ex.: Gap_1 e Overlap_1, entre os elementos 1 e 2): adicione um flap com valores de referência.' }]));
   const ui = ctx.ui, byKey = Object.fromEntries(vars.map((v) => [v.key, v]));
   const firstPair = vars.find((v) => /^Gap_/.test(v.key));
   const cm = (ui.cm = ui.cm || {});
@@ -518,10 +521,10 @@ function conventionsTab(pkg) {
   return h('div', null,
     card('Convenções de montagem (explícitas e configuráveis)',
       h('div', { class: 'fields' },
-        selectField({ label: 'Modo de montagem', value: cv.assemblyMode, options: [['sequencial', 'Sequencial: BA_n posicionado pelo BF_(n−1) (SolidWorks DS_)'], ['pivoFixo', 'Pivô fixo: monta com AoA = 0 e gira cada elemento no pivô']], onChange: (v) => set('assemblyMode', v, 'modo') }),
+        selectField({ label: 'Modo de montagem', value: cv.assemblyMode, options: [['sequencial', 'Sequencial: BA_(n+1) posicionado pelo BF_n (SolidWorks DS_)'], ['pivoFixo', 'Pivô fixo: monta com AoA = 0 e gira cada elemento no pivô']], onChange: (v) => set('assemblyMode', v, 'modo') }),
         selectField({ label: 'Origem', value: cv.anchor, options: [['pivo1', 'Pivô do elemento 1 na origem (DS_)'], ['ba1', 'BA do elemento 1 na origem']], onChange: (v) => set('anchor', v, 'origem') }),
-        selectField({ label: 'Eixos de gap/overlap', value: cv.gapAxes, options: [['escoamento', 'Eixos do escoamento (horizontal/vertical, DS_)'], ['corda', 'Eixos da corda do elemento n−1']], onChange: (v) => set('gapAxes', v, 'eixos gap/overlap') }),
-        selectField({ label: 'Definição do gap', value: cv.gapDef, options: [['ponto', 'Ponto a ponto: BF_(n−1) → BA_n (DS_)'], ['minimo', 'Folga mínima entre contornos (largura da fenda)'], ['tangente', 'Vertical: BF_(n−1) → tangente horizontal ao extradorso do elemento n'], ['tangenteLivre', 'Vertical livre: ponto mais baixo do elemento n−1 → tangente ao extradorso do elemento n (Gap > 0 = sem interseção)']], onChange: (v) => set('gapDef', v, 'definição do gap') }),
+        selectField({ label: 'Eixos de gap/overlap', value: cv.gapAxes, options: [['escoamento', 'Eixos do escoamento (horizontal/vertical, DS_)'], ['corda', 'Eixos da corda do elemento n (o de cima do par)']], onChange: (v) => set('gapAxes', v, 'eixos gap/overlap') }),
+        selectField({ label: 'Definição do gap', value: cv.gapDef, options: [['ponto', 'Ponto a ponto: BF_n → BA_(n+1) (DS_)'], ['minimo', 'Folga mínima entre contornos (largura da fenda)'], ['tangente', 'Vertical: BF_n → tangente horizontal ao extradorso do elemento n+1'], ['tangenteLivre', 'Vertical livre: ponto mais baixo do elemento n → tangente ao extradorso do elemento n+1 (Gap > 0 = sem interseção)']], onChange: (v) => set('gapDef', v, 'definição do gap') }),
         selectField({ label: 'Lado do pivot_off', value: cv.pivotSide, options: [['succao', 'Lado de sucção (DS_)'], ['pressao', 'Lado de pressão']], onChange: (v) => set('pivotSide', v, 'lado do pivô') }),
         selectField({ label: 'pivot_dTE medido', value: cv.pivotDTE, options: [['euclidiana', 'Distância pivô–BF (euclidiana, DS_)'], ['corda', 'Ao longo da corda a partir do BF']], onChange: (v) => set('pivotDTE', v, 'pivot_dTE') }),
         selectField({ label: 'Sinal do AoA', value: String(cv.aoaSign), options: [['1', '+ aumenta a sustentação (BF para cima na asa invertida, DS_)'], ['-1', '+ diminui a sustentação']], onChange: (v) => set('aoaSign', Number(v), 'sinal do AoA') }),
@@ -537,13 +540,14 @@ Rotação (AoA absoluto, θ = −σ·AoA):
   p' = T + R(θ)·(p − P_local),   R(θ) = [[cos θ, −sin θ], [sin θ, cos θ]]
 
 Elemento 1:  T = 0 (pivô 1 na origem)  ou  T = R(θ)·P_local (BA 1 na origem)
-Elemento n ≥ 2 (sequencial):  BA_n = BF_(n−1) + (−Overlap_n, −Gap_n)
-  (eixos do escoamento; nos eixos da corda n−1 o vetor é girado por θ_(n−1))
-  ⇒ Overlap > 0: BA_n a montante do BF_(n−1);  Gap > 0: BA_n do lado de pressão do BF_(n−1)
+Gap_n e Overlap_n: entre o elemento n e o elemento n+1 (ex.: Gap_1 = entre os elementos 1 e 2)
+Elemento n+1 (sequencial):  BA_(n+1) = BF_n + (−Overlap_n, −Gap_n)
+  (eixos do escoamento; nos eixos da corda n o vetor é girado por θ_n)
+  ⇒ Overlap > 0: BA_(n+1) a montante do BF_n;  Gap > 0: BA_(n+1) do lado de pressão do BF_n
 Pivô fixo: monta com AoA = 0 e depois gira cada elemento em torno do próprio pivô.
-Gap como folga mínima: desloca BA_n na direção normal até min dist(contorno n−1, contorno n) = Gap_n (bissecção).
-Gap pela tangente: Gap_n = y(BF_(n−1)) − max y(extradorso_n)  (desloca o elemento n só na vertical; o overlap não muda).
-Gap pela tangente livre: Gap_n = min y(contorno_(n−1) sobre o elemento n) − max y(extradorso_n)  (Gap > 0 ⇒ sem interseção).
+Gap como folga mínima: desloca BA_(n+1) na direção normal até min dist(contorno n, contorno n+1) = Gap_n (bissecção).
+Gap pela tangente: Gap_n = y(BF_n) − max y(extradorso_(n+1))  (desloca o elemento n+1 só na vertical; o overlap não muda).
+Gap pela tangente livre: Gap_n = min y(contorno_n sobre o elemento n+1) − max y(extradorso_(n+1))  (Gap > 0 ⇒ sem interseção).
 
 Escalonamento do pivô no DOE:  pivot_off_n = pivot_off_ref_n/chord_ref_n · chord_n ;  pivot_dTE_n = pivot_dTE_ref_n/chord_ref_n · chord_n
 

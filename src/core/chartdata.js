@@ -76,11 +76,11 @@ export function varyingInputs(recs, ignore = []) {
  * Avisos de condições incompatíveis: entradas que variam dentro de uma série, valores de referência
  * diferentes, mistura de dados de exemplo com dados reais e pacotes com nº de elementos diferente.
  */
-export function buildSeries(recs, { x, y, groupBy = null, perElement = false, includeTotal = true }) {
+export function buildSeries(recs, { x, y, groupBy = null, perElement = false, includeTotal = true, nameOf = (k) => k }) {
   const warnings = [];
   const groups = new Map();
   recs.forEach((r) => {
-    const g = groupBy ? `${groupBy === 'pacote' || groupBy === 'rodada' || groupBy === 'gurney' ? '' : groupBy + ' = '}${fmtV(valueOf(r, groupBy))}` : 'todos';
+    const g = groupBy ? `${groupBy === 'pacote' || groupBy === 'rodada' || groupBy === 'gurney' ? '' : nameOf(groupBy) + ' = '}${fmtV(valueOf(r, groupBy))}` : 'todos';
     if (!groups.has(g)) groups.set(g, []);
     groups.get(g).push(r);
   });
@@ -95,7 +95,7 @@ export function buildSeries(recs, { x, y, groupBy = null, perElement = false, in
       if (pts.length) series.push({ name: groups.size > 1 || !perElement ? (perElement ? `${g} · ${yy.label}` : g) : yy.label, group: g, yKey: yy.key, points: pts });
     });
     const vary = varyingInputs(rs, [x, groupBy].filter(Boolean));
-    if (vary.length) warnings.push(`Série "${g}": os pontos também diferem em ${vary.join(', ')} — a curva mistura condições diferentes (use filtros ou agrupe por uma dessas variáveis).`);
+    if (vary.length) warnings.push(`Série "${g}": os pontos também diferem em ${vary.map(nameOf).join(', ')} —a curva mistura condições diferentes (use filtros ou agrupe por uma dessas variáveis).`);
     const xs = rs.map((r) => valueOf(r, x)).filter((v) => typeof v === 'number');
     const dupX = xs.length - new Set(xs.map((v) => v.toPrecision(8))).size;
     if (dupX > 0 && !vary.length) warnings.push(`Série "${g}": ${dupX} ponto(s) com o mesmo X — possíveis DPs duplicados.`);

@@ -261,7 +261,7 @@ export function assemble(elems, conv = DEFAULT_CONV) {
     });
   });
 
-  runChecks(elems, out, slots, conv, checks, kinds);
+  runChecks(elems, out, slots, conv, checks, kinds, refs);
   return { ok: !checks.some((c) => c.level === 'erro'), elements: out, slots, checks, topology: topo, bbox: bbox(out.flatMap((e) => e.pts)) };
 }
 
@@ -284,7 +284,7 @@ function solveMinGap(e, kind, piv, theta, ref, conv) {
   return { ok: true, shape: (best || f(sHi)).shape };
 }
 
-function runChecks(elems, out, slots, conv, checks, kinds) {
+function runChecks(elems, out, slots, conv, checks, kinds, refs) {
   const n = out.length;
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
@@ -309,8 +309,10 @@ function runChecks(elems, out, slots, conv, checks, kinds) {
     elems.forEach((e, i) => {
       const k = i + 1;
       if (kinds[i] !== 'principal') {
-        if (!(e.gap > 0)) checks.push({ level: 'erro', elem: i, msg: `Gap_${k} = ${e.gap}: cota zero/negativa é inválida no SolidWorks (DS_ não tem sinal). Use ≥ 0,1 mm.` });
-        if (!(e.overlap > 0)) checks.push({ level: 'erro', elem: i, msg: `Overlap_${k} = ${e.overlap}: cota zero/negativa é inválida no SolidWorks (o sinal se perde). Use ≥ 0,1 mm ou reparametrize.` });
+        // nome pelo par, de montante para jusante: Gap_j = entre o elemento j e o j+1 (Gap_ab se não consecutivos)
+        const r = refs[i] + 1, [pa, pb] = kinds[i] === 'slat' ? [k, r] : [r, k], idx = pb === pa + 1 ? `${pa}` : `${pa}${pb}`;
+        if (!(e.gap > 0)) checks.push({ level: 'erro', elem: i, msg: `Gap_${idx} = ${e.gap}: cota zero/negativa é inválida no SolidWorks (DS_ não tem sinal). Use ≥ 0,1 mm.` });
+        if (!(e.overlap > 0)) checks.push({ level: 'erro', elem: i, msg: `Overlap_${idx} = ${e.overlap}: cota zero/negativa é inválida no SolidWorks (o sinal se perde). Use ≥ 0,1 mm ou reparametrize.` });
       }
       if (e.aoa < 0) {
         if (kinds[i] === 'slat') checks.push({ level: 'aviso', elem: i, msg: `AoA_${k} negativo (slat defletido): a cota angular do SolidWorks não tem sinal — dimensione o ângulo do slat a partir do lado oposto da horizontal e registre a convenção.` });

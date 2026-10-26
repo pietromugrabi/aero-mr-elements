@@ -98,7 +98,8 @@ export function buildDemoProject({ completo = false } = {}) {
   p1.config.domain.groundClearance = 60; // valor de exemplo
   p1.status = 'concluído';
   addRun(p1, 'Varredura AoA_2 × AoA_3', { AoA_2: '14; 18; 22', AoA_3: '28; 33; 38' });
-  addRun(p1, 'Varredura Gap_2 × Overlap_2', { Gap_2: '5; 6; 7; 8', Overlap_2: '2,5; 3,5; 4,5' }, 'fatorial', 7);
+  // chaves internas Gap_2/Overlap_2 = par 1–2, exibido como Gap_1/Overlap_1
+  addRun(p1, 'Varredura Gap_1 × Overlap_1', { Gap_2: '5; 6; 7; 8', Overlap_2: '2,5; 3,5; 4,5' }, 'fatorial', 7);
   addRun(p1, 'Varredura de velocidade', { Uinf: '15:5:35' });
   prj.packages.push(p1);
   if (!completo) {
