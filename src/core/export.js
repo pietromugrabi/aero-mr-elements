@@ -117,8 +117,8 @@ export function meshPlanMD(pkg, sugg) {
 > **Plano** para aplicar no ANSYS Meshing. Este aplicativo **não gera malha**. Valores marcados como "sugestão" são heurísticos.
 
 - Método: **${meth}**
-- Tamanho máximo global: ${val(m.globalMax)}${sugg ? ` (sugestão: ${fx(sugg.globalMax, 1)} mm)` : ''}
-- Taxa de crescimento global: ${val(m.growthRate, '')}
+- Tamanho do elemento (Element Size; Malha → Padrões → Tamanho do Elemento): ${val(m.globalMax)}${sugg ? ` (sugestão: ${fx(sugg.globalMax, 1)} mm)` : ''}
+- Taxa de crescimento global (Malha → Dimensionamento → Taxa de Crescimento; a da inflation está na tabela de inflation): ${val(m.growthRate, '')}
 - y+ alvo: ${m.yplusTarget}
 
 ## Edge sizing
