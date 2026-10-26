@@ -206,9 +206,14 @@ const circle = (c, r) => Array.from({ length: 48 }, (_, k) => [c[0] + r * Math.c
 
 // ------------------------------------------------------------------ Aba Montagem
 function assemblyScene(pkg, w) {
-  const t = pkg.config.transform, d = directions(t);
+  const t = pkg.config.transform, d = directions(t), gapDef = pkg.config.conventions?.gapDef || 'ponto';
+  // gap pela tangente: reta horizontal tangente ao elemento e cota vertical do gap (no plano do CAD)
+  const tanOf = (s) => {
+    const c = gapDef === 'tangente' ? s.tanBF : gapDef === 'tangenteLivre' ? s.tanFree : null;
+    return c && { value: c.value, tangent: toPlane(c.tangent, t), from: toPlane(c.from, t), foot: toPlane(c.foot, t), line: c.line.map((p) => toPlane(p, t)) };
+  };
   return {
-    elements: w.plane.map((e, i) => ({ ...e, label: `Elemento ${i + 1}${e.kind !== 'flap' ? ` (${e.kind})` : ''}` })), slots: w.asm.slots.map((s) => ({ ...s, from: toPlane(s.from, t), to: toPlane(s.to, t), pa: s.pa && toPlane(s.pa, t), pb: s.pb && toPlane(s.pb, t) })),
+    elements: w.plane.map((e, i) => ({ ...e, label: `Elemento ${i + 1}${e.kind !== 'flap' ? ` (${e.kind})` : ''}` })), slots: w.asm.slots.map((s) => ({ ...s, from: toPlane(s.from, t), to: toPlane(s.to, t), pa: s.pa && toPlane(s.pa, t), pb: s.pb && toPlane(s.pb, t), tan: tanOf(s) })),
     flow: [t.sx, 0], lift: [0, t.sy], liftLabel: t.sy < 0 ? `sustentação (${d.liftLabel}, downforce)` : `sustentação (${d.liftLabel})`, axes: planeAxes(t.plane),
   };
 }

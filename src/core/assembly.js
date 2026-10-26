@@ -113,16 +113,36 @@ export function tangentGap(kind, refPoint, pts) {
   return null;
 }
 
-/** Menor (lower=true) ou maior y do contorno dentro da faixa x ∈ [x0, x1], com as bordas interpoladas. */
-function yExtremeInRange(pts, x0, x1, lower) {
+/** Ponto de menor (lower=true) ou maior y do contorno dentro da faixa x ∈ [x0, x1], com as bordas interpoladas. */
+function extremeInRange(pts, x0, x1, lower) {
   let best = null;
-  const take = (y) => { if (best === null || (lower ? y < best : y > best)) best = y; };
+  const take = (x, y) => { if (best === null || (lower ? y < best[1] : y > best[1])) best = [x, y]; };
   for (let k = 0; k < pts.length; k++) {
     const p = pts[k], q = pts[(k + 1) % pts.length];
-    if (p[0] >= x0 && p[0] <= x1) take(p[1]);
-    [x0, x1].forEach((x) => { if ((p[0] - x) * (q[0] - x) < 0) take(p[1] + ((q[1] - p[1]) * (x - p[0])) / (q[0] - p[0])); });
+    if (p[0] >= x0 && p[0] <= x1) take(p[0], p[1]);
+    [x0, x1].forEach((x) => { if ((p[0] - x) * (q[0] - x) < 0) take(x, p[1] + ((q[1] - p[1]) * (x - p[0])) / (q[0] - p[0])); });
   }
   return best;
+}
+const yExtremeInRange = (pts, x0, x1, lower) => extremeInRange(pts, x0, x1, lower)?.[1] ?? null;
+
+/**
+ * Construção das definições pela tangente, para desenhar na Montagem: ponto de tangência no elemento
+ * (topo do flap / base do upperflap), reta horizontal por ele e a cota vertical do gap a partir do
+ * ponto de partida (BF do ref, ou o ponto mais baixo/alto do ref sobre o elemento, na versão livre).
+ * @returns {{tangent:[x,y], from:[x,y], foot:[x,y], line:[[x,y],[x,y]], value}|null}
+ */
+export function tangentConstruction(kind, refPts, refPoint, pts, free) {
+  if (kind !== 'flap' && kind !== 'upperflap') return null;
+  const top = kind === 'flap';
+  const tangent = pts.reduce((b, p) => (top ? p[1] > b[1] : p[1] < b[1]) ? p : b, pts[0]);
+  const xs = pts.map((p) => p[0]);
+  const from = free ? (extremeInRange(refPts, Math.min(...xs), Math.max(...xs), top) || refPoint) : refPoint;
+  const foot = [from[0], tangent[1]];
+  const span = Math.max(...xs) - Math.min(...xs);
+  const pad = 0.08 * span;
+  const xa = Math.min(tangent[0], from[0]) - pad, xb = Math.max(tangent[0], from[0]) + pad;
+  return { tangent, from, foot, line: [[xa, tangent[1]], [xb, tangent[1]]], value: top ? from[1] - tangent[1] : tangent[1] - from[1] };
 }
 
 /**
@@ -235,6 +255,8 @@ export function assemble(elems, conv = DEFAULT_CONV) {
       overlapFlow: d[0] / rule.sx, gapFlow: d[1] / rule.sy, overlapChord: dc[0] / rule.sx, gapChord: dc[1] / rule.sy,
       gapTangent: tangentGap(kind, a[rule.refPt], b.pts),
       gapTangentClear: clearTangentGap(kind, a.pts, a[rule.refPt], b.pts),
+      tanBF: tangentConstruction(kind, a.pts, a[rule.refPt], b.pts, false),
+      tanFree: tangentConstruction(kind, a.pts, a[rule.refPt], b.pts, true),
       clearance: md.d, pa: md.pa, pb: md.pb,
     });
   });

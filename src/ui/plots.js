@@ -99,6 +99,30 @@ export function geomPlot(scene, opts = {}) {
   const X = (x) => W / 2 + (x - view.cx) * view.k, Y = (y) => H / 2 - (y - view.cy) * view.k;
   const path = (pts, close = true) => pts.map((p, i) => `${i ? 'L' : 'M'}${X(p[0]).toFixed(2)},${Y(p[1]).toFixed(2)}`).join('') + (close ? 'Z' : '');
 
+  /** Gap pela tangente: reta horizontal tangente (tracejada), ponto de tangência e cota vertical com setas. */
+  function drawTangentGap(tn, tag, th, labels) {
+    const col = th.warn;
+    const [l0, l1] = tn.line;
+    svg.append(s('line', { x1: X(l0[0]), y1: Y(l0[1]), x2: X(l1[0]), y2: Y(l1[1]), stroke: col, 'stroke-width': 1.3, 'stroke-dasharray': '6 4' }));
+    // linha de chamada horizontal no ponto de partida (BF ou ponto mais baixo do elemento de cima)
+    const ext = 10 / view.k;
+    svg.append(s('line', { x1: X(tn.from[0] - ext), y1: Y(tn.from[1]), x2: X(tn.from[0] + ext), y2: Y(tn.from[1]), stroke: col, 'stroke-width': 1 }));
+    svg.append(s('circle', { cx: X(tn.tangent[0]), cy: Y(tn.tangent[1]), r: 3.5, fill: th.surface, stroke: col, 'stroke-width': 1.5 }));
+    svg.append(s('circle', { cx: X(tn.from[0]), cy: Y(tn.from[1]), r: 3, fill: col }));
+    // cota vertical com setas nas duas pontas
+    const x = X(tn.from[0]), ya = Y(tn.from[1]), yb = Y(tn.foot[1]);
+    svg.append(s('line', { x1: x, y1: ya, x2: x, y2: yb, stroke: col, 'stroke-width': 1.3 }));
+    const dir = Math.sign(yb - ya) || 1, aw = 4, al = Math.min(7, Math.abs(yb - ya) / 2.5);
+    if (al > 1.5) {
+      svg.append(s('path', { d: `M${x},${ya} L${x - aw},${ya + dir * al} L${x + aw},${ya + dir * al} Z`, fill: col }));
+      svg.append(s('path', { d: `M${x},${yb} L${x - aw},${yb - dir * al} L${x + aw},${yb - dir * al} Z`, fill: col }));
+    }
+    if (labels) {
+      const txt = `g${tag} = ${fmtSig(tn.value, 4)} mm`, ty = (ya + yb) / 2 + 4;
+      svg.append(s('text', { x: x + 8, y: ty, 'font-size': 11, 'font-weight': 600, fill: col, 'paint-order': 'stroke', stroke: th.surface, 'stroke-width': 3 }, txt));
+    }
+  }
+
   function draw() {
     W = Math.max(320, wrap.clientWidth || 800);
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
@@ -138,6 +162,14 @@ export function geomPlot(scene, opts = {}) {
     if (show.gaps) (sc.slots || []).forEach((sl, i) => {
       const a = sl.from || sc.elements[i].te, b = sl.to || sc.elements[i + 1].le, tag = sl.pair ? sl.pair.join('') : `${i + 1}${i + 2}`;
       const c = [b[0], a[1]];
+      if (sl.tan) {
+        // gap pela tangente; o overlap continua sendo a distância horizontal BF → BA
+        drawTangentGap(sl.tan, tag, th, show.labels);
+        svg.append(s('line', { x1: X(a[0]), y1: Y(a[1]), x2: X(c[0]), y2: Y(c[1]), stroke: th.text2, 'stroke-width': 1, 'stroke-dasharray': '2 2' }));
+        if (show.labels) svg.append(s('text', { x: (X(a[0]) + X(c[0])) / 2, y: Y(a[1]) - 6, 'font-size': 10.5, fill: th.text2, 'text-anchor': 'middle' }, `o${tag}`));
+        if (show.clearance && sl.pa && sl.pb) svg.append(s('line', { x1: X(sl.pa[0]), y1: Y(sl.pa[1]), x2: X(sl.pb[0]), y2: Y(sl.pb[1]), stroke: th.err, 'stroke-width': 1.5 }));
+        return;
+      }
       svg.append(s('path', { d: path([a, c, b], false), fill: 'none', stroke: th.text2, 'stroke-width': 1, 'stroke-dasharray': '2 2' }));
       if (show.labels) svg.append(s('text', { x: X(b[0]) + 4, y: (Y(a[1]) + Y(b[1])) / 2, 'font-size': 10.5, fill: th.text2 }, `g${tag}`), s('text', { x: (X(a[0]) + X(c[0])) / 2, y: Y(a[1]) + 12, 'font-size': 10.5, fill: th.text2, 'text-anchor': 'middle' }, `o${tag}`));
       if (show.clearance && sl.pa && sl.pb) svg.append(s('line', { x1: X(sl.pa[0]), y1: Y(sl.pa[1]), x2: X(sl.pb[0]), y2: Y(sl.pb[1]), stroke: th.err, 'stroke-width': 1.5 }));
