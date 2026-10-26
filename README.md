@@ -140,16 +140,17 @@ Geometria → aba **Mapa de conflito**. Escolha 2 variáveis (ex.: Gap_2 × Over
 
 ## Otimização alternada
 
-Inputs / Design Points → cartão **Otimização alternada** (busca por blocos: cada rodada varia um bloco de variáveis com as demais fixas).
+Inputs / Design Points → cartão **Otimização alternada**, no método da planilha "Otimização Alternada": cada rodada é uma grade de **2 parâmetros** com os demais fixos.
 
-1. Escolha o **critério** do pacote (Cl_total, Cl/Cd, lift_el2...) e o **objetivo**: maior |valor| (downforce com Cl < 0), maior ou menor valor.
-2. Com os resultados importados, o cartão mostra o **melhor DP** da rodada (dá para fixar outro), os níveis testados e avisa quando o ótimo caiu na **borda** da faixa (o ótimo pode estar fora dela).
-3. **Próxima rodada**: escolha o bloco (a ordem da passada é AoA_1 × AoA_2 → Gap_1 × Overlap_1 → AoA_2 × AoA_3 → Gap_2 × Overlap_2; com o ótimo na borda o padrão é repetir o bloco). Os níveis vêm propostos e são editáveis:
-   - variável nova na cadeia: 5 níveis com passo padrão (2° para AoA, 2 mm para gap/overlap, 0,01 para x/c);
-   - ótimo no interior: refino com 3 níveis e metade do passo;
-   - ótimo na borda: mesmo passo, faixa recentrada no melhor valor.
-4. **Criar próxima rodada** cria a rodada (fatorial), com as demais variáveis fixas nos valores do DP escolhido (selo "herdado" no Planejamento), aplica as regras de validade e a verificação de geometria, gera os DPs e a torna ativa. O Mapa de conflito usa esses valores fixos.
-5. O cartão mostra a **cadeia** de rodadas e a melhora em relação à rodada anterior; abaixo da tolerância (padrão 1 %), depois de percorrer todos os blocos, a otimização convergiu.
+1. Escolha a **melhor configuração** do pacote: maior |lift| (Lift_force), maior |Cl| ou maior |Cl|/Cd (sempre em módulo: a downforce sai negativa no Fluent).
+2. Com os resultados importados, o cartão mostra a **grade** do critério (linhas × colunas, como as tabelas da planilha), o **melhor DP** em destaque e a **região vizinha** em verde: DPs em níveis vizinhos ao melhor com |critério| a até a faixa % do melhor (padrão 2 %).
+3. **Valores fixos da próxima rodada**: o **centro da região vizinha** (o "valor intermediário" do intervalo dos melhores, como na planilha; ex.: AoA_MP de 6 a 8 → 7) ou os **valores exatos de um DP**. O cartão avisa quando o ótimo caiu na **borda** da faixa (o ótimo pode estar fora dela) e quando o ponto intermediário não foi simulado.
+4. **Próxima rodada**: outro par (a ordem da passada é AoA_1 × AoA_2 → Gap_1 × Overlap_1 → AoA_2 × AoA_3 → Gap_2 × Overlap_2; com o ótimo na borda o padrão é repetir o par) ou um par escolhido. Os níveis vêm propostos e são editáveis:
+   - parâmetro novo na cadeia: 5 níveis com passo padrão (2° para AoA, 2 mm para gap/overlap, 0,01 para x/c);
+   - ótimo no interior: refino entre os vizinhos, com 3 níveis e metade do passo;
+   - ótimo na borda: mesmo passo, faixa recentrada.
+5. **Criar próxima rodada** cria a rodada (fatorial 2D) com os valores fixos (selo "herdado" no Planejamento), aplica as regras de validade e a verificação de geometria, gera os DPs e a torna ativa. O Mapa de conflito usa esses valores fixos.
+6. O cartão mostra a **cadeia** de rodadas e a melhora em relação à rodada anterior; abaixo da tolerância (padrão 1 %), depois de percorrer todos os pares, a otimização convergiu.
 
 ## Sugestões de chord, AoA, Gap e Overlap
 

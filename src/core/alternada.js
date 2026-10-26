@@ -1,7 +1,8 @@
-// Otimização alternada (busca por blocos de coordenadas): cada rodada varia um bloco de variáveis
-// numa grade (ex.: AoA_1 × AoA_2); o melhor DP pelo critério vira o ponto fixo da próxima rodada,
-// que varia outro bloco (ex.: Gap_1 × Overlap_1). Uma passada percorre todos os blocos; as passadas
-// seguintes refinam (passo pela metade) até a melhora ficar abaixo da tolerância.
+// Otimização alternada (como a planilha "Otimização Alternada"): cada rodada varia 2 parâmetros
+// numa grade (ex.: AoA_1 × AoA_2); acha-se o melhor DP pelo critério (|lift|, |Cl| ou |Cl|/Cd) e a
+// região de valores vizinhos quase tão bons; o centro dessa região (ou o próprio DP) vira o ponto
+// fixo da próxima rodada, que varia outro par (ex.: Gap_1 × Overlap_1). Uma passada percorre todos
+// os pares; as seguintes refinam (passo pela metade) até a melhora ficar abaixo da tolerância.
 // Sem DOM. As rodadas encadeadas guardam run.alt = { step, fromRunId, fromDpId, ... } e
 // run.doe.base = valores fixos herdados do melhor DP.
 
@@ -10,9 +11,16 @@ import { doeVariables, generateDesigns, filterValidRows, makeDesignPoints, LIMIT
 import { referenceInputs, topologyOf, pairOf, isRelGap, keys } from './wing.js';
 import { newRun } from './model.js';
 
-export const DEFAULT_ALT = Object.freeze({ metric: 'Cl', goal: 'absmax', tol: 1, nLevels: 5 });
-export const GOALS = [['absmax', 'maior |valor| (downforce, Cl < 0)'], ['max', 'maior valor'], ['min', 'menor valor']];
-export const altConfig = (pkg) => ({ ...DEFAULT_ALT, ...(pkg.config.altOpt || {}) });
+/** Critérios (sempre em módulo: downforce sai com sinal negativo no Fluent). */
+export const CRITERIA = [['L', 'maior |lift| (Lift_force)'], ['Cl', 'maior |Cl| (Cl_total)'], ['ClCd', 'maior |Cl|/Cd']];
+/** band = faixa (% do melhor) da região vizinha; fix = 'regiao' (centro da região) | 'dp' (valores exatos de um DP). */
+export const DEFAULT_ALT = Object.freeze({ metric: 'Cl', goal: 'absmax', tol: 1, nLevels: 5, band: 2, fix: 'regiao' });
+export function altConfig(pkg) {
+  const c = { ...DEFAULT_ALT, ...(pkg.config.altOpt || {}) };
+  if (!CRITERIA.some(([k]) => k === c.metric)) c.metric = DEFAULT_ALT.metric;
+  c.goal = 'absmax';
+  return c;
+}
 
 /** Pontuação (maior = melhor) de um valor pelo objetivo. */
 export function score(v, goal) { return goal === 'absmax' ? Math.abs(v) : goal === 'min' ? -v : v; }
@@ -58,6 +66,58 @@ export function fixedFrom(pkg, dp) {
   const out = {};
   doeVariables(pkg).forEach((v) => { const x = Number(dp.inputs[v.key]); if (Number.isFinite(x)) out[v.key] = x; });
   return out;
+}
+
+/**
+ * Grade 2D da rodada (como a planilha): exige exatamente 2 variáveis variadas.
+ * cells[j][i] = melhor registro {dp, v, s} com Y = ys[j] e X = xs[i] (null = sem resultado).
+ */
+export function grid2D(pkg, run, cfg = altConfig(pkg)) {
+  const vv = variedVars(pkg, run);
+  if (vv.length !== 2) return null;
+  const [X, Y] = vv, R = rankRun(pkg, run, cfg);
+  const cells = Y.levels.map(() => X.levels.map(() => null));
+  R.ranked.forEach((c) => {
+    const i = X.levels.indexOf(r6(c.dp.inputs[X.key])), j = Y.levels.indexOf(r6(c.dp.inputs[Y.key]));
+    if (i >= 0 && j >= 0 && !cells[j][i]) cells[j][i] = c;
+  });
+  return { X, Y, cells, best: R.best };
+}
+
+/**
+ * Região vizinha ao melhor (o "intervalo dos melhores valores" da planilha): DPs com pontuação
+ * ≥ (1 − faixa%) · melhor, ligados ao melhor por níveis vizinhos (cada variável variada difere
+ * no máximo 1 nível). Para cada variável variada: [mín, máx] da região e o centro.
+ */
+export function goodRegion(pkg, run, cfg = altConfig(pkg)) {
+  const R = rankRun(pkg, run, cfg);
+  if (!R.best) return null;
+  const vv = variedVars(pkg, run), lim = R.best.s * (1 - (Number(cfg.band) || 0) / 100);
+  const idx = (c) => vv.map((v) => v.levels.indexOf(r6(c.dp.inputs[v.key])));
+  const cand = R.ranked.filter((c) => c.s >= lim).map((c) => ({ c, ix: idx(c) }));
+  const near = (a, b) => a.ix.every((x, k) => Math.abs(x - b.ix[k]) <= 1);
+  const good = [cand[0]], queue = [cand[0]], left = new Set(cand.slice(1));
+  while (queue.length) {
+    const a = queue.shift();
+    [...left].forEach((b) => { if (near(a, b)) { left.delete(b); good.push(b); queue.push(b); } });
+  }
+  const ranges = {};
+  vv.forEach((v) => {
+    const xs = good.map((g) => Number(g.c.dp.inputs[v.key]));
+    const mn = Math.min(...xs), mx = Math.max(...xs);
+    ranges[v.key] = { key: v.key, label: v.label, unit: v.unit, min: r6(mn), max: r6(mx), center: r6((mn + mx) / 2) };
+  });
+  return { good: good.map((g) => g.c), ids: new Set(good.map((g) => g.c.dp.id)), ranges, lim, best: R.best };
+}
+
+/** Valores fixos da próxima rodada: os do DP; no modo 'regiao', as variáveis variadas vão para o centro da região vizinha. */
+export function fixedFor(pkg, run, dp, cfg = altConfig(pkg)) {
+  const f = fixedFrom(pkg, dp);
+  if (cfg.fix === 'regiao') {
+    const g = goodRegion(pkg, run, cfg);
+    if (g) Object.values(g.ranges).forEach((r) => { f[r.key] = r.center; });
+  }
+  return f;
 }
 
 /** Rodadas da cadeia até esta (mais antiga primeiro), seguindo run.alt.fromRunId no pacote. */
@@ -149,14 +209,15 @@ export function improvement(pkg, run, cfg = altConfig(pkg)) {
  * DPs já gerados com as regras de validade e a verificação de geometria do pacote.
  * @returns {{run, removed, nGeo, error?}}
  */
-export function buildNextRun(pkg, run, dp, levels, { name, uid, cfg = altConfig(pkg) } = {}) {
-  const fixed = fixedFrom(pkg, dp);
+export function buildNextRun(pkg, run, dp, levels, { name, uid, cfg = altConfig(pkg), fixed: given = null } = {}) {
+  const fixed = given || fixedFrom(pkg, dp);
   const b = rankRun(pkg, run, cfg).ranked.find((x) => x.dp === dp);
   const nr = newRun(name || `Alternada ${(run.alt?.step || 1) + 1}`);
   const pivotScaling = run.doe?.pivotScaling !== false;
   nr.doe = { method: 'fatorial', levels: Object.fromEntries(Object.entries(levels).filter(([, v]) => String(v).trim())), base: fixed, pivotScaling };
-  nr.alt = { step: (run.alt?.step || 1) + 1, fromRunId: run.id, fromRunName: run.name, fromDpId: dp.id, fromDpName: dp.name, metric: cfg.metric, goal: cfg.goal, value: b ? b.v : null };
-  nr.notes = `Otimização alternada, passo ${nr.alt.step}: valores fixos do ${dp.name} de "${run.name}"${b ? ` (${cfg.metric} = ${r6(b.v)})` : ''}.`;
+  const fromRegion = !!given && cfg.fix === 'regiao';
+  nr.alt = { step: (run.alt?.step || 1) + 1, fromRunId: run.id, fromRunName: run.name, fromDpId: dp.id, fromDpName: dp.name, fix: fromRegion ? 'regiao' : 'dp', metric: cfg.metric, goal: cfg.goal, value: b ? b.v : null };
+  nr.notes = `Otimização alternada, passo ${nr.alt.step}: valores fixos ${fromRegion ? `no centro da região vizinha ao ${dp.name}` : `do ${dp.name}`} de "${run.name}"${b ? ` (${cfg.metric} = ${r6(b.v)})` : ''}.`;
   const base = { ...referenceInputs(pkg), ...fixed };
   const rows = generateDesigns('fatorial', nr.doe.levels, base);
   if (rows.length > LIMITS.max) return { run: null, removed: 0, nGeo: 0, error: `${rows.length} pontos excedem o limite.` };
