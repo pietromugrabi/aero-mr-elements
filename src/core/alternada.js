@@ -1,6 +1,6 @@
 // Método de DOE "Otimização alternada" (como a planilha "Otimização Alternada"), por etapas dentro
 // da mesma rodada:
-//   etapa 1: fatorial de 1–2 variáveis (ex.: AoA_1 × AoA_2, 5 níveis cada) → tabela como a planilha;
+//   etapa 1: fatorial de 1–3 variáveis (ex.: AoA_1 × AoA_2, 5 níveis cada) → tabela como a planilha;
 //   etapa k: entra outra variável (ex.: AoA_3, 5 níveis), cruzada só com as melhores combinações da
 //            etapa anterior: o máximo do critério (|lift|, |Cl| ou |Cl|/Cd) e seus vizinhos
 //            (cada variável a no máximo 1 nível de distância do máximo).
@@ -15,6 +15,8 @@ export const CRITERIA = [['L', 'maior |lift| (Lift_force)'], ['Cl', 'maior |Cl| 
 /** Quais vizinhos do máximo seguem para a próxima etapa. */
 export const NEIGHBOR_MODES = [['todos', 'máximo + todos os vizinhos'], ['faixa', 'máximo + vizinhos a até a faixa % do máximo']];
 export const DEFAULT_ALT = Object.freeze({ metric: 'Cl', neighbors: 'todos', band: 2 });
+/** Variáveis por etapa: 1, 2 (como a planilha) ou 3. */
+export const MAX_STAGE_VARS = 3;
 
 export function altConfig(run) {
   const c = { ...DEFAULT_ALT, ...(run?.doe?.altOpt || {}) };
@@ -81,6 +83,7 @@ export function stageErrors(run, k, varKeys) {
   const st = stagesOf(run)[k], out = [];
   const ks = (st?.keys || []).filter(Boolean);
   if (!ks.length) out.push('escolha a variável');
+  if (ks.length > MAX_STAGE_VARS) out.push(`no máximo ${MAX_STAGE_VARS} variáveis por etapa`);
   if (uniq(ks).length < ks.length) out.push('variáveis repetidas');
   ks.forEach((key) => {
     if (varKeys && !varKeys.includes(key)) out.push(`${key} não existe neste pacote`);
@@ -115,16 +118,16 @@ export function stageCount(pkg, run, k, cfg = altConfig(run)) {
 }
 
 /**
- * Tabela no formato da planilha: etapa 0 com 2 variáveis = linhas da 1ª × colunas da 2ª;
- * etapa k > 0 = linhas = combinações vindas da etapa anterior, colunas = níveis das variáveis novas.
+ * Tabela no formato da planilha: colunas = níveis da última variável nova da etapa; linhas =
+ * combinações das demais (as que vieram da etapa anterior + as outras variáveis novas).
+ * Ex.: etapa 1 com 2 variáveis = linhas da 1ª × colunas da 2ª; com 3 = linhas (1ª, 2ª) × colunas da 3ª.
  * cells[r][c] = { dp, v } (v = valor da métrica pedida; null sem resultado) ou null se o DP não existe.
  */
 export function stageTable(pkg, run, k, metric) {
   const st = stagesOf(run)[k], dps = stageDps(run, k);
   const nk = (st.keys || []).filter(Boolean);
-  let rowKeys, colKeys;
-  if (k === 0) { rowKeys = nk.length > 1 ? [nk[0]] : []; colKeys = nk.length > 1 ? nk.slice(1) : nk; }
-  else { rowKeys = keysUpTo(run, k - 1).filter((key) => !nk.includes(key)); colKeys = nk; }
+  const colKeys = nk.slice(-1);
+  const rowKeys = [...(k === 0 ? [] : keysUpTo(run, k - 1).filter((key) => !nk.includes(key))), ...nk.slice(0, -1)];
   const tuple = (d, ks) => ks.map((key) => r6(d.inputs[key]));
   const cmp = (a, b) => { for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] - b[i]; return 0; };
   const rowsT = uniq(dps.map((d) => JSON.stringify(tuple(d, rowKeys)))).map((s) => JSON.parse(s)).sort(cmp);

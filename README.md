@@ -142,8 +142,8 @@ Geometria → aba **Mapa de conflito**. Escolha 2 variáveis (ex.: Gap_2 × Over
 
 Inputs / Design Points → Planejamento → método **Otimização alternada** (ao lado de Fatorial completo, Um fator por vez e Manual), no formato da planilha "Otimização Alternada". A rodada é feita em **etapas**:
 
-1. **Etapa 1**: 1–2 variáveis com seus níveis (ex.: AoA_1 × AoA_2, 5 níveis cada) → fatorial (25 DPs). Rode no Fluent e importe os resultados: a etapa vira uma **tabela** como a da planilha (linhas = variável 1, colunas = variável 2), com o **máximo** em vermelho e os **vizinhos** em verde.
-2. **+ Adicionar etapa**: entra outra variável (ex.: AoA_3, 5 níveis), cruzada só com as melhores combinações da etapa anterior: o **máximo e seus vizinhos** (um nível acima ou abaixo em cada variável; ex.: 9 combinações × 5 níveis = 45 DPs). A tabela da etapa tem linhas = combinações que vieram da etapa anterior e colunas = níveis da variável nova.
+1. **Etapa 1**: escolha quantos parâmetros analisar juntos — **1, 2 (como a planilha) ou 3** — e os níveis de cada (ex.: AoA_1 × AoA_2, 5 níveis cada) → fatorial (25 DPs; com 3 parâmetros de 5 níveis, 125 DPs). Rode no Fluent e importe os resultados: a etapa vira uma **tabela** como a da planilha (colunas = último parâmetro, linhas = os demais; ex.: com 3, linhas = combinações AoA_1, AoA_2 e colunas = AoA_3), com o **máximo** em vermelho e os **vizinhos** em verde (em 3 parâmetros, até 27 combinações).
+2. **+ Adicionar etapa**: entram outros parâmetros (1, 2 ou 3; ex.: AoA_3, 5 níveis), cruzada só com as melhores combinações da etapa anterior: o **máximo e seus vizinhos** (um nível acima ou abaixo em cada variável; ex.: 9 combinações × 5 níveis = 45 DPs). A tabela da etapa tem linhas = combinações que vieram da etapa anterior e colunas = níveis da variável nova.
 3. E assim por diante (Gap, Overlap...). Cada etapa só pode ser gerada depois que a anterior tem resultados; regerar uma etapa substitui os DPs dela e das seguintes.
 
 - **Melhor resultado**: maior |lift| (Lift_force), maior |Cl| ou maior |Cl|/Cd (em módulo: a downforce sai negativa no Fluent). A tabela pode mostrar |lift|, Cl, Cd ou Cl/Cd.

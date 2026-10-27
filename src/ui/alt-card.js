@@ -7,7 +7,7 @@ import * as store from './store.js';
 import { doeVariables, parseLevels, filterValidRows, makeDesignPoints, LIMITS } from '../core/doe.js';
 import { uid } from '../core/model.js';
 import { metricList } from '../core/outputs.js';
-import { altConfig, CRITERIA, NEIGHBOR_MODES, stagesOf, stageDps, stageErrors, stageRows, stageCount, stageTable, carried, overallBest, stageEdges, keysUpTo } from '../core/alternada.js';
+import { altConfig, CRITERIA, NEIGHBOR_MODES, MAX_STAGE_VARS,stagesOf, stageDps, stageErrors, stageRows, stageCount, stageTable, carried, overallBest, stageEdges, keysUpTo } from '../core/alternada.js';
 
 const SHOW = [['L', '|lift|'], ['Cl', 'Cl'], ['Cd', 'Cd'], ['ClCd', 'Cl/Cd']];
 
@@ -67,7 +67,12 @@ export function altPlan(ctx, pkg, run, { base, pivotScaling }) {
     const status = dps.length ? badge(`${dps.length} DP(s), ${nRes} com resultado`, nRes === dps.length ? 'ok' : 'warn') : k > 0 && !prev ? badge('aguardando resultados da etapa anterior', 'warn') : badge('não gerada', '');
     const usedBefore = keysUpTo(run, k - 1);
     const opts = vars.map((v) => [v.key, `${v.label} — ${v.group}${usedBefore.includes(v.key) ? ' (já variada antes)' : ''}`]);
-    const setKey = (i, v) => upd(() => { st.keys = [...(st.keys || [])]; st.keys[i] = v || undefined; st.keys = st.keys.filter((x, j) => x || j === 0); st.levels = st.levels || {}; }, `etapa ${k + 1}: variável ${i + 1}`, v);
+    // nº de parâmetros da etapa: 1, 2 (padrão da etapa 1, como a planilha) ou 3
+    const nv = Math.min(MAX_STAGE_VARS, Math.max(1, st.nVars || (k === 0 ? 2 : 1), ks.filter(Boolean).length));
+    const setNv = (m) => upd(() => { st.nVars = m; st.keys = (st.keys || []).slice(0, m); }, `etapa ${k + 1}: ${m} parâmetro(s)`, m);
+    const setKey = (i, v) => upd(() => { const a = Array.from({ length: nv }, (_, j) => (st.keys || [])[j] || ''); a[i] = v || ''; st.keys = a.filter(Boolean); st.nVars = nv; st.levels = st.levels || {}; }, `etapa ${k + 1}: variável ${i + 1}`, v);
+    // a tabela tem o último parâmetro nas colunas e os demais (e as combinações da etapa anterior) nas linhas
+    const varLabel = (i) => `Parâmetro ${i + 1}${i === nv - 1 ? ' (colunas da tabela)' : k === 0 ? ' (linhas da tabela)' : ' (linhas, com as combinações anteriores)'}`;
     const levelInputs = ks.filter(Boolean).map((key) => {
       const p = parseLevels(st.levels?.[key]);
       const inp = h('input', { type: 'text', value: st.levels?.[key] || '', placeholder: 'ex.: 0; 2; 4; 6; 8  ou  0:2:8', style: { width: '100%' }, dataset: { k: `alt_${k}_${key}` } });
@@ -91,9 +96,10 @@ export function altPlan(ctx, pkg, run, { base, pivotScaling }) {
     return h('div', { class: 'card', style: { marginTop: '10px' } },
       h('div', { class: 'row', style: { alignItems: 'center' } }, h('h3', { style: { margin: 0 } }, `Etapa ${k + 1}`), status, h('span', { class: 'spacer' }),
         k === stages.length - 1 && k > 0 ? h('button', { class: 'small danger', onclick: async () => { if (dps.length && !(await confirmBox('Remover etapa', `Remover a etapa ${k + 1} e seus ${dps.length} DP(s)?`, 'Remover', true))) return; upd(() => { doe.stages = doe.stages.slice(0, k); run.dps = run.dps.filter((d) => d.stage !== k); }, `etapa ${k + 1} removida`); } }, 'Remover etapa') : null),
-      h('div', { class: 'fields' },
-        selectField({ label: k === 0 ? 'Variável 1 (linhas da tabela)' : 'Variável nova', value: ks[0] || '', options: [['', '— escolha —'], ...opts], onChange: (v) => setKey(0, v) }),
-        selectField({ label: k === 0 ? 'Variável 2 (colunas da tabela)' : 'Outra variável nova (opcional)', value: ks[1] || '', options: [['', '— nenhuma —'], ...opts], onChange: (v) => setKey(1, v) })),
+      h('div', { class: 'row', style: { margin: '6px 0' } }, h('span', { class: 'lbl' }, k === 0 ? 'Parâmetros analisados juntos:' : 'Parâmetros novos nesta etapa:'),
+        seg(Array.from({ length: MAX_STAGE_VARS }, (_, i) => [String(i + 1), String(i + 1)]), String(nv), (v) => setNv(Number(v))),
+        h('small', { class: 'muted' }, nv === 3 ? `3 parâmetros: ${k === 0 ? 'cada um com 5 níveis dá 125 DPs; ' : ''}máximo + vizinhos podem ser até 27 combinações por etapa` : '')),
+      h('div', { class: 'fields' }, Array.from({ length: nv }, (_, i) => selectField({ label: varLabel(i), value: ks[i] || '', options: [['', '— escolha —'], ...opts], onChange: (v) => setKey(i, v) }))),
       levelInputs.length ? h('div', { class: 'table-wrap' }, h('table', null, h('thead', null, h('tr', null, ['Variável', 'Referência', 'Níveis', ''].map((t) => h('th', null, t)))), h('tbody', null, levelInputs))) : null,
       msgs(notes),
       info ? h('div', null,
@@ -107,13 +113,13 @@ export function altPlan(ctx, pkg, run, { base, pivotScaling }) {
   const best = overallBest(pkg, run, cfg);
   const last = stages.length - 1;
   return h('div', null,
-    h('p', { class: 'muted' }, 'Como a planilha: a etapa 1 é um fatorial de 1–2 variáveis (ex.: AoA_1 × AoA_2 com 5 níveis cada) e vira uma tabela. Cada etapa seguinte acrescenta outra variável (ex.: AoA_3 com 5 níveis) cruzada só com as melhores combinações da etapa anterior: o máximo do critério e seus vizinhos (um nível acima ou abaixo em cada variável). As variáveis fora das etapas ficam no valor de referência.'),
+    h('p', { class: 'muted' }, 'Como a planilha: a etapa 1 é um fatorial de 2 parâmetros (ex.: AoA_1 × AoA_2 com 5 níveis cada; também dá para analisar 1 ou 3 juntos) e vira uma tabela. Cada etapa seguinte acrescenta outro parâmetro (ex.: AoA_3 com 5 níveis) cruzada só com as melhores combinações da etapa anterior: o máximo do critério e seus vizinhos (um nível acima ou abaixo em cada variável). As variáveis fora das etapas ficam no valor de referência.'),
     h('div', { class: 'fields' },
       selectField({ label: 'Melhor resultado', value: cfg.metric, options: CRITERIA, onChange: (v) => setOpt('metric', v), hint: 'em módulo: downforce sai negativa no Fluent' }),
       selectField({ label: 'Seguem para a próxima etapa', value: cfg.neighbors, options: NEIGHBOR_MODES, onChange: (v) => setOpt('neighbors', v) }),
       cfg.neighbors === 'faixa' ? numField({ label: 'Faixa', unit: '% do máximo', value: cfg.band, key: 'alt_band', onChange: (v) => setOpt('band', Math.max(0, v ?? 2)) }) : null),
     stages.map(stageEl),
     h('div', { class: 'row', style: { marginTop: '10px' } },
-      h('button', { disabled: !stageDps(run, last).length || null, title: stageDps(run, last).length ? '' : 'gere a etapa atual antes', onclick: () => upd(() => { doe.stages = [...doe.stages, { keys: [], levels: {} }]; }, `etapa ${stages.length + 1} adicionada`) }, '+ Adicionar etapa (outra variável)')),
+      h('button', { disabled: !stageDps(run, last).length || null, title: stageDps(run, last).length ? '' : 'gere a etapa atual antes', onclick: () => upd(() => { doe.stages = [...doe.stages, { keys: [], levels: {} }]; }, `etapa ${stages.length + 1} adicionada`) }, '+ Adicionar etapa (outros parâmetros)')),
     best ? msgs([{ level: 'ok', msg: `Melhor até agora: ${best.dp.name} (etapa ${best.dp.stage + 1}) — ${metLabel(cfg.metric)} = ${fv(best.v, 5)}; ${keysUpTo(run, stages.length - 1).map((key) => `${labelOf(key)} = ${fv(best.dp.inputs[key], 4)}`).join(', ')}.` }]) : null);
 }
