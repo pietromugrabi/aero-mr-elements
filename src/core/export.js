@@ -29,16 +29,65 @@ export function coordsCSV(planeEl, plane) {
   return toCSV(['ponto', ...order.map((a) => `${a} [mm]`)], pts.map((p, i) => [i + 1, f6(p[0]), f6(p[1]), f6(p[2])])) + `# plano ${plane}: horizontal=${h}, vertical=${v}, normal=${nrm}\n`;
 }
 
-/** SolidWorks "Curva por pontos XYZ" (.txt, valores em mm, curva fechada repetindo o 1º ponto). */
-export function solidworksCurve(planeEl, plane) {
-  return planeEl.pts.concat([planeEl.pts[0]]).map((p) => to3D(p, plane).map((c) => c.toFixed(6)).join('\t')).join('\r\n') + '\r\n';
+/**
+ * Contorno fechado (mm) com pontos extras nos trechos retos junto aos cantos (BF, Gurney).
+ * A curva por pontos do CAD é uma spline única que passa por todos os pontos e arredondaria os
+ * cantos (o Gurney vira uma "bolha"); com pontos cada vez mais próximos do canto (s0, s0·r, ...,
+ * medidos ao longo do contorno até o espaçamento alcançar o dos pontos originais) a spline segue o
+ * contorno desenhado no app. Os pontos novos ficam sobre os segmentos originais; o 1º ponto não muda.
+ * `at(p)` limita os cantos a uma região (ex.: perto do BF, para não "quinar" um BA com poucos pontos).
+ */
+export function refineCorners(pts, { angle = 30, s0 = 0.01, ratio = 1.5, at = () => true } = {}) {
+  const P = pts.filter((p, i) => { const q = pts[(i + 1) % pts.length]; return Math.hypot(p[0] - q[0], p[1] - q[1]) > 1e-9; }); // sem pontos repetidos
+  const n = P.length;
+  if (n < 3) return P;
+  const cosLim = Math.cos((angle * Math.PI) / 180);
+  const seg = (i) => Math.hypot(P[(i + 1) % n][0] - P[i][0], P[(i + 1) % n][1] - P[i][1]);
+  const C = P.map((p, i) => i).filter((i) => {
+    if (!at(P[i])) return false;
+    const a = P[(i - 1 + n) % n], p = P[i], b = P[(i + 1) % n];
+    const u = [p[0] - a[0], p[1] - a[1]], v = [b[0] - p[0], b[1] - p[1]];
+    return (u[0] * v[0] + u[1] * v[1]) / (Math.hypot(...u) * Math.hypot(...v)) < cosLim;
+  });
+  if (!C.length) return P;
+  const S = [0];
+  for (let i = 1; i < n; i++) S.push(S[i - 1] + seg(i - 1));
+  const T = S[n - 1] + seg(n - 1), mod = (s) => ((s % T) + T) % T;
+  const segAt = (s) => { let j = n - 1; while (S[j] > s) j--; return j; };
+  const extra = [];
+  C.forEach((c, k) => {
+    const next = C[(k + 1) % C.length], prev = C[(k - 1 + C.length) % C.length];
+    [[1, mod(S[next] - S[c]) || T], [-1, mod(S[c] - S[prev]) || T]].forEach(([dir, span]) => {
+      for (let d = s0; d < span / 2; d *= ratio) {
+        const s = mod(S[c] + dir * d), j = segAt(s);
+        if (d * (ratio - 1) > seg(j)) break; // já tão espaçado quanto os pontos originais
+        if (s - S[j] > 1e-6 && S[j] + seg(j) - s > 1e-6) extra.push(s);
+      }
+    });
+  });
+  const at2 = (s) => { const j = segAt(s), t = (s - S[j]) / seg(j), q = P[(j + 1) % n]; return [P[j][0] + t * (q[0] - P[j][0]), P[j][1] + t * (q[1] - P[j][1])]; };
+  return P.map((p, i) => ({ s: S[i], p })).concat([...new Set(extra)].map((s) => ({ s, p: at2(s) }))).sort((a, b) => a.s - b.s).map((x) => x.p);
 }
 
-/** DesignModeler 3D Curve (grupo, id, x, y, z). Fecha repetindo o 1º ponto. */
+/** Contorno do elemento montado com os cantos do BF e do Gurney refinados (BA intocado). */
+export function curvePoints(planeEl) {
+  const g = planeEl.gurney, te = planeEl.te;
+  const r = Math.max(0.15 * (planeEl.chord || 0), g ? g.pos + g.t + g.h + 1 : 0);
+  return te && r > 0 ? refineCorners(planeEl.pts, { at: (p) => Math.hypot(p[0] - te[0], p[1] - te[1]) <= r }) : planeEl.pts.slice();
+}
+
+/** SolidWorks "Curva por pontos XYZ" (.txt, valores em mm, curva fechada repetindo o 1º ponto; cantos refinados). */
+export function solidworksCurve(planeEl, plane) {
+  const pts = curvePoints(planeEl);
+  return pts.concat([pts[0]]).map((p) => to3D(p, plane).map((c) => c.toFixed(6)).join('\t')).join('\r\n') + '\r\n';
+}
+
+/** DesignModeler 3D Curve (grupo, id, x, y, z). Fecha repetindo o 1º ponto; cantos refinados. */
 export function designModelerCurve(planeEls, plane) {
   const lines = ['# DesignModeler: Concept/3D Curve → arquivo de coordenadas (grupo id X Y Z), mm', '# Cada grupo = um elemento. Curva fechada repetindo o 1º ponto. Confira a sintaxe de fechamento na sua versão do DM.'];
   planeEls.forEach((e, g) => {
-    e.pts.concat([e.pts[0]]).forEach((p, i) => { const q = to3D(p, plane); lines.push(`${g + 1} ${i + 1} ${q[0].toFixed(6)} ${q[1].toFixed(6)} ${q[2].toFixed(6)}`); });
+    const pts = curvePoints(e);
+    pts.concat([pts[0]]).forEach((p, i) => { const q = to3D(p, plane); lines.push(`${g + 1} ${i + 1} ${q[0].toFixed(6)} ${q[1].toFixed(6)} ${q[2].toFixed(6)}`); });
   });
   return lines.join('\r\n') + '\r\n';
 }
