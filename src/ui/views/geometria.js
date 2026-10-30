@@ -70,11 +70,14 @@ function previews(pkg, i, proc, el) {
   const t = pkg.config.transform, c = Number(el.chord_ref) || 1, [hx, vy] = planeAxes(t.plane);
   const orig = proc.original;
   const fin = proc.final.map((p) => toPlane([p[0] * c, p[1] * c], t));
+  // pivô local (pivot_off_ref / pivot_dTE_ref com as convenções): em x/c no original, em mm no transformado
+  const pv = Number(el.chord_ref) > 0 && Number(el.pivot_dTE_ref) > 0 ? pivotLocal(c, Number(el.pivot_off_ref), Number(el.pivot_dTE_ref), pkg.config.conventions) : null;
+  const pLbl = `P${i + 1}`, mk = (pts, pivot) => [{ pts, label: '', pivot, pivotLabel: pLbl, series: i }]; // cor do elemento i
   return h('div', { class: 'grid g2', style: { marginTop: '8px' } },
-    h('div', null, h('div', { class: 'lbl' }, 'Original (.dat normalizado, x/c × y/c)'),
-      geomPlot(() => ({ elements: [{ pts: orig, label: '' }], axes: ['x/c', 'y/c'] }), { height: 190, show: { pivots: false, chords: false, vectors: false, labels: false }, name: `${el.profileName}_original` })),
-    h('div', null, h('div', { class: 'lbl' }, `Transformado (${hx}, ${vy} em mm, corda ${fmt(c, 1)} mm, sem AoA)`),
-      geomPlot(() => ({ elements: [{ pts: fin, label: '' }], axes: [hx, vy], flow: [t.sx, 0], lift: [0, t.sy] }), { height: 190, show: { pivots: false, chords: false, labels: false }, name: `${el.profileName}_transformado` })));
+    h('div', null, h('div', { class: 'lbl' }, `Original (.dat normalizado, x/c × y/c)${pv?.ok ? ` · ${pLbl} = pivô` : ''}`),
+      geomPlot(() => ({ elements: mk(orig, pv?.ok ? [pv.p[0] / c, pv.p[1] / c] : null), fitPts: orig, axes: ['x/c', 'y/c'] }), { height: 190, show: { pivots: true, chords: false, vectors: false, labels: false }, name: `${el.profileName}_original` })),
+    h('div', null, h('div', { class: 'lbl' }, `Transformado (${hx}, ${vy} em mm, corda ${fmt(c, 1)} mm, sem AoA)${pv?.ok ? ` · ${pLbl} = pivô` : ''}`),
+      geomPlot(() => ({ elements: mk(fin, pv?.ok ? toPlane(pv.p, t) : null), fitPts: fin, axes: [hx, vy], flow: [t.sx, 0], lift: [0, t.sy] }), { height: 190, show: { pivots: true, chords: false, labels: false }, name: `${el.profileName}_transformado` })));
 }
 
 function gurneyBlock(pkg, i, w) {

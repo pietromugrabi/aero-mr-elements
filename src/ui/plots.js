@@ -147,12 +147,15 @@ export function geomPlot(scene, opts = {}) {
     }
     (sc.overlays || []).forEach((o) => svg.append(s('path', { d: path(o.pts, o.close !== false), fill: 'none', stroke: o.color || th.muted, 'stroke-width': o.width || 1, 'stroke-dasharray': o.dash || null })));
     sc.elements.forEach((e, i) => {
-      const col = th.series[i % 8];
+      const col = th.series[(e.series ?? i) % 8]; // series: cor do elemento quando o gráfico mostra só ele
       svg.append(s('path', { d: path(e.pts), fill: col, 'fill-opacity': 0.18, stroke: col, 'stroke-width': 2, 'stroke-linejoin': 'round' }));
       if (show.chords && e.le && e.te) svg.append(s('line', { x1: X(e.le[0]), y1: Y(e.le[1]), x2: X(e.te[0]), y2: Y(e.te[1]), stroke: col, 'stroke-width': 1, 'stroke-dasharray': '5 4' }));
       if (show.pivots && e.pivot) {
+        // pivô: círculo com cruz na cor do elemento + rótulo P n (cada aerofólio com o seu)
         const px = X(e.pivot[0]), py = Y(e.pivot[1]);
-        svg.append(s('circle', { cx: px, cy: py, r: 5, fill: th.surface, stroke: th.text, 'stroke-width': 1.5 }), s('line', { x1: px - 8, x2: px + 8, y1: py, y2: py, stroke: th.text }), s('line', { y1: py - 8, y2: py + 8, x1: px, x2: px, stroke: th.text }));
+        svg.append(s('circle', { cx: px, cy: py, r: 5, fill: th.surface, stroke: col, 'stroke-width': 2 }), s('line', { x1: px - 9, x2: px + 9, y1: py, y2: py, stroke: col, 'stroke-width': 1.5 }), s('line', { y1: py - 9, y2: py + 9, x1: px, x2: px, stroke: col, 'stroke-width': 1.5 }));
+        const pl = e.pivotLabel ?? (show.labels ? `P${i + 1}` : null);
+        if (pl) svg.append(s('text', { x: px + 8, y: py + 15, 'font-size': 10.5, 'font-weight': 600, fill: col, 'paint-order': 'stroke', stroke: th.surface, 'stroke-width': 3 }, pl));
       }
       if (show.labels && e.le) {
         const nearRight = X(e.le[0]) > W - 110;
