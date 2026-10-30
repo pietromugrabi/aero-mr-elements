@@ -112,6 +112,8 @@ ZIP/XLSX, relatório Excel com gráficos, slat, Gurney parametrizado e migraçã
   - **pelo BF**: `BA_up = BF_ref + (−Overlap, −Gap)` (Overlap > 0 = BA a montante do BF do ref);
   - **pelo BA**: `BA_up = BA_ref + (+Stagger, −Gap)` (Stagger, guardado em Overlap_n, > 0 = a jusante do BA do ref).
   Gap > 0 = acima (lado de pressão na asa invertida). Nomes DS_: `DS_gap{ref}{n}`, `DS_overlap{ref}{n}` ou `DS_stagger{ref}{n}`.
+  O *+ Adicionar upperflap* cria o upperflap já **pelo BA** do principal (medido entre os bordos de ataque).
+  **2º upperflap**: o botão *+ Adicionar upperflap atrás do elemento n* cria um upperflap encadeado no anterior, como flap 1 → flap 2: `BA_up2 = BF_up1 + (−Overlap, −Gap)` (nome `Gap_n`/`Overlap_n` do par).
 - Para experimentar slat, upperflap e Gurney, use os botões *+ Adicionar slat*, *+ Adicionar upperflap* e *+ Definir Gurney flap* em Geometria (o exemplo padrão não traz nenhum deles).
 
 ## Gap/Overlap entre os bordos de ataque

@@ -26,6 +26,7 @@ function setEl(pkg, i, field, value, label) {
 // ------------------------------------------------------------------ Aba Elementos
 function generalCard(pkg) {
   const c = pkg.config, t = c.transform, d = directions(t);
+  const lastUpper = resolveTopology(c.elements).kinds.lastIndexOf('upperflap'); // o 2º upperflap encadeia no último
   return card('Configuração geral',
     h('div', { class: 'fields' },
       selectField({ label: 'Número de elementos', value: String(c.elements.length), options: [1, 2, 3, 4, 5, 6, 7, 8].map((i) => [String(i), `${i}`]),
@@ -42,8 +43,9 @@ function generalCard(pkg) {
       h('small', { class: 'muted' }, 'Valores de exemplo (cotas DS_ do modelo de referência).'),
       h('span', { class: 'spacer' }),
       h('button', { onclick: () => store.update(() => { addSlat(c); }, ['geometria', pkg.name, 'slat adicionado', 'sem valores de referência']) }, '+ Adicionar slat'),
-      h('button', { onclick: () => store.update(() => { addUpperflap(c); }, ['geometria', pkg.name, 'upperflap adicionado', 'sem valores de referência']) }, '+ Adicionar upperflap')),
-    h('p', { class: 'muted', style: { margin: '8px 0 0' } }, 'Slat = a montante do elemento de referência; upperflap = acima dele (pelo BF ou pelo BA). Os dois usam o principal como referência por padrão e vêm sem valores: informe corda, AoA, gap, overlap/stagger, pivô e .dat.'));
+      h('button', { onclick: () => store.update(() => { addUpperflap(c, { anchor: 'ba' }); }, ['geometria', pkg.name, 'upperflap adicionado', 'pelo BA do principal, sem valores de referência']) }, '+ Adicionar upperflap'),
+      lastUpper >= 0 ? h('button', { onclick: () => store.update(() => { addUpperflap(c, { ref: lastUpper, anchor: 'bf' }); }, ['geometria', pkg.name, '2º upperflap adicionado', `a partir do BF do elemento ${lastUpper + 1}`]) }, `+ Adicionar upperflap atrás do elemento ${lastUpper + 1}`) : null),
+    h('p', { class: 'muted', style: { margin: '8px 0 0' } }, 'Slat = a montante do elemento de referência; upperflap = acima do principal, medido entre os bordos de ataque (BA do principal → BA do upperflap; dá para trocar para o BF no card do elemento). O upperflap seguinte é encadeado como flap 1 → flap 2: Gap/Overlap do BF do upperflap anterior ao BA dele. Todos vêm sem valores: informe corda, AoA, gap, overlap/stagger, pivô e .dat.'));
 }
 
 function datSummary(proc) {

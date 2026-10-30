@@ -95,11 +95,16 @@ export function addSlat(cfg) {
   return cfg.elements.length - 1;
 }
 
-/** Acrescenta um upperflap (acima do principal; sem valores de referência). */
-export function addUpperflap(cfg) {
+/**
+ * Acrescenta um upperflap (sem valores de referência). Padrão: acima do principal, pelo BF.
+ * ref = índice de outro upperflap encadeia (BA_up2 = BF_up1 + (−Overlap, −Gap), como flap 1 → flap 2);
+ * anchor = ponto do ref ('bf' ou 'ba').
+ */
+export function addUpperflap(cfg, { ref = null, anchor = 'bf' } = {}) {
   const principal = Math.max(0, cfg.elements.findIndex((e) => e.type === 'principal'));
   const el = defaultElement('upperflap');
-  el.ref = principal;
+  el.ref = Number.isInteger(ref) ? ref : principal;
+  el.upAnchor = anchor === 'ba' ? 'ba' : 'bf';
   cfg.elements.push(el);
   cfg.nElements = cfg.elements.length;
   syncDependentLists(cfg);
