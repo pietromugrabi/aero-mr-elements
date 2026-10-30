@@ -16,14 +16,15 @@ export function doeVariables(pkg) {
     vars.push({ key: keys.aoa(n), label: `AoA_${n}`, unit: '°', group: g, element: n, ref: el.aoa_ref });
     const pr = pairOf(pkg, n);
     if (pr) {
-      const note = `${pr.kind !== 'flap' ? pr.kind + ' ' : ''}par ${pr.a}–${pr.b}${pr.anchor === 'ba' ? ' (Overlap = stagger a partir do BA)' : ''}`;
+      const note = `${pr.kind !== 'flap' ? pr.kind + ' ' : ''}par ${pr.a}–${pr.b}${pr.anchor === 'ba' ? (pr.kind === 'upperflap' ? ' (Overlap = stagger a partir do BA)' : ' (medidos entre os BAs)') : ''}`;
       if (isRelGap(el)) {
         const b = gapBaseIndex(pkg, i) + 1, rn = `${note}; × chord_${b}`;
         vars.push({ key: keys.gapc(n), label: `${pairName(pkg, n, 'Gap')}/c`, unit: 'x/c', group: g, element: n, ref: el.gapc_ref, note: rn });
         vars.push({ key: keys.overlapc(n), label: `${pairName(pkg, n, 'Overlap')}/c`, unit: 'x/c', group: g, element: n, ref: el.overlapc_ref, note: rn });
       } else {
-        vars.push({ key: keys.gap(n), label: pairName(pkg, n, 'Gap'), unit: 'mm', group: g, element: n, ref: el.gap_ref, note });
-        vars.push({ key: keys.overlap(n), label: pairName(pkg, n, 'Overlap'), unit: 'mm', group: g, element: n, ref: el.overlap_ref, note });
+        const from = pr.kind === 'flap' ? pr.anchor : undefined; // flap medido a partir do BF ou do BA do ref
+        vars.push({ key: keys.gap(n), label: pairName(pkg, n, 'Gap'), unit: 'mm', group: g, element: n, ref: el.gap_ref, note, from });
+        vars.push({ key: keys.overlap(n), label: pairName(pkg, n, 'Overlap'), unit: 'mm', group: g, element: n, ref: el.overlap_ref, note, from });
       }
     }
     if (gurneyConfigured(el)) {

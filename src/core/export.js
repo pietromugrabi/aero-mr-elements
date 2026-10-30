@@ -260,7 +260,7 @@ Este aplicativo prepara, organiza e analisa. **Nada abaixo é executado por ele.
 
 ## SolidWorks
 - [ ] Atualizar as cotas DS_ do esboço de referência (cordas, AoA, gap, overlap, pivôs${gur ? ', Gurney' : ''}) ou importar as curvas exportadas (Curva por pontos XYZ, mm).
-- [ ] Conferir que todas as cotas dirigentes têm o prefixo DS (Parameter Key = DS no Workbench).
+${pkg.config.conventions?.gapPoint === 'ba' ? '- [ ] Gap/Overlap estão medidos entre os bordos de ataque: cotar DS_gap/DS_overlap do BA do elemento de referência ao BA do flap (vertical e horizontal), não a partir do BF.\n' : ''}- [ ] Conferir que todas as cotas dirigentes têm o prefixo DS (Parameter Key = DS no Workbench).
 - [ ] Verificar visualmente interseções: o SolidWorks não as detecta.
 ${slat ? '- [ ] Slat: criar as cotas de posição do BF do slat em relação ao BA do elemento de referência (DS_gap/DS_overlap do par slat → ref, com a convenção do app) e o pivô do slat.\n' : ''}${gur ? '- [ ] Gurney: cotas DS_gurney_h/t/pos; ligar/desligar Gurney NÃO é cota — use configurações/peças separadas (com e sem Gurney) se o DOE variar gurney_on.\n' : ''}
 

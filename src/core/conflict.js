@@ -20,6 +20,8 @@ export function defaultRange(v) {
   if (v.unit === '°') return { min: r - 10, max: r + 10 };
   if (v.unit === 'x/c') return { min: +(Math.max(0.001, r * 0.25)).toPrecision(4), max: +(r * 2 || 0.05).toPrecision(4) };
   if (/^chord_/.test(v.key)) return { min: +(r * 0.7).toPrecision(5), max: +(r * 1.3).toPrecision(5) };
+  // overlap medido entre os BAs é da ordem da corda do ref: ±10 % em vez de 0,25×–2×
+  if (v.from === 'ba' && /^Overlap_/.test(v.key)) return { min: +(r * 0.9).toPrecision(5), max: +(r * 1.1).toPrecision(5) };
   return { min: +(Math.max(0.1, r * 0.25)).toPrecision(4), max: +(r * 2 || 10).toPrecision(4) };
 }
 

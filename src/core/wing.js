@@ -1,10 +1,10 @@
 // Integração: configuração do pacote (+ entradas de um Design Point) → geometria montada no CAD.
 
 import { processProfile, elementLocal } from './profile.js';
-import { assemble, DEFAULT_CONV, resolveTopology } from './assembly.js';
+import { assemble, DEFAULT_CONV, resolveTopology, placementRule, tangentGap, upAnchorOf, leToLe } from './assembly.js';
 import { scalePivot } from './pivots.js';
 import { toPlane, DEFAULT_TRANSFORM } from './transform.js';
-import { bbox } from './geom.js';
+import { bbox, sub, rotate } from './geom.js';
 
 const cache = new Map();
 function hash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36) + s.length; }
@@ -72,8 +72,9 @@ export function pairOf(pkg, n) {
   if (tp.kinds[i] === 'principal') return null;
   const r = tp.refs[i] + 1;
   if (tp.kinds[i] === 'slat') return { kind: 'slat', a: n, b: r };
-  if (tp.kinds[i] === 'upperflap') return { kind: 'upperflap', a: r, b: n, anchor: pkg.config.elements[i].upAnchor === 'ba' ? 'ba' : 'bf' };
-  return { kind: 'flap', a: r, b: n };
+  const conv = pkg.config.conventions;
+  if (tp.kinds[i] === 'upperflap') return { kind: 'upperflap', a: r, b: n, anchor: upAnchorOf(conv, pkg.config.elements[i].upAnchor) };
+  return { kind: 'flap', a: r, b: n, anchor: leToLe(conv) ? 'ba' : 'bf' };
 }
 
 /**
@@ -184,4 +185,43 @@ export function buildWing(pkg, inputs = null) {
     ok: asm.ok, errors, procs, asm, plane, conv, transform: t, inputs: inp,
     chordSum: elems.reduce((s, e) => s + e.chord, 0), bbox: bbox(allPts),
   };
+}
+
+/**
+ * Gap/Overlap (mm) da montagem de referência medidos com outro ponto de medição (gapPoint 'bf' ou 'ba'),
+ * para trocar a convenção sem mover os elementos. Por elemento: null no principal; gap null quando a
+ * definição do gap não depende do ponto (folga mínima, tangente livre).
+ */
+export function gapsInConvention(pkg, gapPoint) {
+  const w = buildWing(pkg);
+  if (!w.asm?.elements) return null;
+  const conv = { ...w.conv, gapPoint }, els = w.asm.elements;
+  return pkg.config.elements.map((el, i) => {
+    const e = els[i];
+    if (e.ref == null) return null;
+    const a = els[e.ref], rule = placementRule(e.kind, el.upAnchor, conv);
+    const d = sub(e[rule.own], a[rule.refPt]), v = conv.gapAxes === 'corda' ? rotate(d, -a.theta) : d;
+    const gap = conv.gapDef === 'ponto' ? v[1] / rule.sy : conv.gapDef === 'tangente' ? tangentGap(e.kind, a[rule.refPt], e.pts) : null;
+    return { overlap: v[0] / rule.sx, gap };
+  });
+}
+
+/** Troca o ponto de medição de Gap/Overlap; com keepGeometry, converte os _ref para a montagem não mudar. */
+export function setGapPoint(pkg, gapPoint, keepGeometry = true) {
+  const conv = pkg.config.conventions;
+  if ((conv.gapPoint || 'bf') === gapPoint) return 0;
+  const vals = keepGeometry ? gapsInConvention(pkg, gapPoint) : null;
+  conv.gapPoint = gapPoint;
+  let n = 0;
+  (vals || []).forEach((v, i) => {
+    if (!v) return;
+    const el = pkg.config.elements[i], um = (x) => +x.toFixed(6); // mm com resolução de 1 nm; frações com 9 casas
+    const put = (k, mm) => {
+      if (mm == null || !Number.isFinite(mm)) return;
+      if (isRelGap(el)) { const c = Number(pkg.config.elements[gapBaseIndex(pkg, i)]?.chord_ref); if (c > 0) { el[`${k}c_ref`] = +(mm / c).toFixed(9); n++; } } else { el[`${k}_ref`] = um(mm); n++; }
+    };
+    put('overlap', v.overlap); put('gap', v.gap);
+  });
+  syncRelativeGaps(pkg);
+  return n;
 }

@@ -3,8 +3,9 @@
 // DOE; o melhor valor sai das simulações. Todas as faixas são relativas ao elemento de referência:
 //   chord_n = razão · chord_ref ;  AoA_n = AoA_ref + ΔAoA ;  Gap_n, Overlap_n = fração · chord_ref.
 
-import { resolveTopology } from './assembly.js';
+import { resolveTopology, leToLe, DEFAULT_CONV } from './assembly.js';
 import { clone } from './model.js';
+import { DEG } from './geom.js';
 
 const R = (min, mid, max) => ({ min, mid, max });
 
@@ -42,7 +43,7 @@ const scale = (r, f, add = 0) => (r && ok(r.mid) ? { min: ok(r.min) ? Number(r.m
  * Elementos são resolvidos a partir do principal, seguindo a cadeia de referências.
  */
 export function suggestGeometry(pkg) {
-  const els = pkg.config.elements, tp = resolveTopology(els), s = suggestConfig(pkg);
+  const els = pkg.config.elements, tp = resolveTopology(els), s = suggestConfig(pkg), conv = { ...DEFAULT_CONV, ...(pkg.config.conventions || {}) };
   const p = Math.max(0, tp.kinds.indexOf('principal'));
   const out = els.map((_, i) => ({ kind: tp.kinds[i], ref: tp.refs[i], chord: null, aoa: null, gap: null, overlap: null, msgs: [] }));
   // razão de corda acumulada em relação ao principal (para dividir a corda total)
@@ -77,12 +78,29 @@ export function suggestGeometry(pkg) {
         o.overlap = scale(rule.overlap, cRef);
       }
       if (aRef != null) o.aoa = scale(rule.dAoA, 1, aRef);
+      if (o.kind === 'flap' && leToLe(conv) && cRef != null && aRef != null) toLeToLe(o, cRef, aRef, conv);
       const missing = [['chord', 'razão de corda'], ['aoa', 'ΔAoA'], ['gap', 'gap'], ['overlap', 'overlap']].filter(([k]) => !o[k]).map(([, l]) => l);
       if (missing.length) o.msgs.push(`Sem sugestão de ${missing.join(', ')}: ${cRef == null || aRef == null ? 'falta o valor do elemento de referência' : `configure a faixa de ${tp.kinds[i]}`}.`);
       done.add(i);
     });
   }
   return out;
+}
+
+/**
+ * As faixas típicas são BF_ref → BA_flap. Com Gap/Overlap medidos entre os BAs, soma o vetor da corda do
+ * ref (BA_ref → BF_ref = R(θ_ref)·(c_ref, 0)): Overlap_BA = c·cos θ − Overlap_BF, Gap_BA = Gap_BF − c·sin θ
+ * (eixos do escoamento) ou Overlap_BA = c − Overlap_BF, Gap_BA = Gap_BF (eixos da corda do ref).
+ * Só a definição ponto a ponto/tangente depende do ponto; folga mínima e tangente livre mantêm o gap.
+ */
+function toLeToLe(o, cRef, aRef, conv) {
+  const th = -(conv.aoaSign === -1 ? -1 : 1) * aRef * DEG, chordAxes = conv.gapAxes === 'corda';
+  const dx = chordAxes ? cRef : cRef * Math.cos(th), dy = chordAxes ? 0 : cRef * Math.sin(th);
+  const map = (r, f) => { if (!r) return r; const a = r.min != null ? f(r.min) : null, b = r.max != null ? f(r.max) : null; return { min: a != null && b != null ? Math.min(a, b) : a ?? b, mid: f(r.mid), max: a != null && b != null ? Math.max(a, b) : null }; };
+  o.overlap = map(o.overlap, (v) => dx - v);
+  if (conv.gapDef === 'ponto') o.gap = map(o.gap, (v) => v - dy);
+  else if (conv.gapDef === 'tangente') o.gap = map(o.gap, (v) => v - cRef * Math.sin(th)); // tangente: sempre na vertical
+  o.msgs.push('Gap/Overlap convertidos para a medida entre os bordos de ataque (BA do ref → BA deste).');
 }
 
 /**

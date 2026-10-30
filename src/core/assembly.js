@@ -11,6 +11,9 @@
 //      'bf' → BA_up = BF_ref + (−overlap, −gap)  (Overlap > 0: BA a montante do BF do ref)
 //      'ba' → BA_up = BA_ref + (+stagger, −gap)  (Stagger = Overlap_n; > 0: BA a jusante do BA do ref)
 //    Gap > 0: lado de pressão (acima, no CAD padrão da asa invertida).
+//  - gapPoint 'ba' (convenção global): Gap/Overlap medidos entre os bordos de ataque:
+//      flap e upperflap → BA_n = BA_ref + (+overlap, −gap)  (Overlap > 0: BA a jusante do BA do ref;
+//      Gap > 0: BA do lado de pressão do BA do ref). O slat continua BF_slat = BA_ref + (+overlap, +gap).
 //
 // Convenções (todas configuráveis em `conv`):
 //  - AoA positivo = nariz para cima no referencial do perfil (aumenta a sustentação no sentido
@@ -35,20 +38,27 @@ import { DEG, add, sub, rotate, polygonDistance, polygonsIntersect, pointInPolyg
 import { pivotLocal } from './pivots.js';
 
 export const DEFAULT_CONV = Object.freeze({
-  assemblyMode: 'sequencial', anchor: 'pivo1', gapAxes: 'escoamento', gapDef: 'ponto',
+  assemblyMode: 'sequencial', anchor: 'pivo1', gapAxes: 'escoamento', gapDef: 'ponto', gapPoint: 'bf',
   pivotSide: 'succao', pivotDTE: 'euclidiana', aoaSign: 1, chordDef: 'geometrica',
   swRules: true, clearanceMin: 1.0,
 });
 
 export const TYPE_LABEL = { principal: 'principal', flap: 'flap', slat: 'slat', upperflap: 'upperflap' };
 
+/** Gap/Overlap medidos entre os bordos de ataque (BA_ref → BA do elemento) em vez de BF_ref → BA? */
+export const leToLe = (conv) => conv?.gapPoint === 'ba';
+
+/** Ponto do ref de onde se mede o upperflap: 'ba' se a convenção global é BA → BA, senão o do elemento. */
+export const upAnchorOf = (conv, upAnchor) => (leToLe(conv) ? 'ba' : upAnchor === 'ba' ? 'ba' : 'bf');
+
 /**
  * Regra de posicionamento de cada tipo: ponto do ref (refPt), ponto do elemento (own) e sinais de
  * overlap/gap no vetor ref→elemento, nos eixos do escoamento: v = (sx·Overlap, sy·Gap).
+ * conv.gapPoint 'ba': flap e upperflap medidos de BA a BA.
  */
-export function placementRule(kind, upAnchor = 'bf') {
+export function placementRule(kind, upAnchor = 'bf', conv = null) {
   if (kind === 'slat') return { refPt: 'le', own: 'te', sx: 1, sy: 1 };
-  if (kind === 'upperflap' && upAnchor === 'ba') return { refPt: 'le', own: 'le', sx: 1, sy: -1 };
+  if ((kind === 'upperflap' && upAnchorOf(conv, upAnchor) === 'ba') || (kind === 'flap' && leToLe(conv))) return { refPt: 'le', own: 'le', sx: 1, sy: -1 };
   return { refPt: 'te', own: 'le', sx: -1, sy: -1 }; // flap e upperflap a partir do BF
 }
 
@@ -95,7 +105,7 @@ function offsetVec(rule, overlap, gap, axes, thetaRef) {
 /** Posiciona o elemento i (já girado) em relação ao ref; dy = deslocamento vertical extra. */
 function placeRelative(e, kind, piv, theta, ref, conv, gapValue, dy = 0) {
   const rotOnly = placeShape(e.local, e.chord, piv, theta, [0, 0]);
-  const rule = placementRule(kind, e.upAnchor);
+  const rule = placementRule(kind, e.upAnchor, conv);
   const anchorRef = ref[rule.refPt];
   const own = rotOnly[rule.own];
   const target = add(anchorRef, offsetVec(rule, e.overlap, gapValue, conv.gapAxes, ref.theta));
@@ -168,7 +178,7 @@ export function clearTangentGap(kind, refPts, refPoint, pts) {
  * cima) seja igual ao Gap informado. O deslocamento vertical não muda a faixa x, então é linear.
  */
 function solveTangentGap(e, kind, piv, theta, ref, conv) {
-  const rule = placementRule(kind, e.upAnchor);
+  const rule = placementRule(kind, e.upAnchor, conv);
   const shape0 = placeRelative(e, kind, piv, theta, ref, conv, e.gap);
   const g0 = conv.gapDef === 'tangenteLivre' ? clearTangentGap(kind, ref.pts, ref[rule.refPt], shape0.pts) : tangentGap(kind, ref[rule.refPt], shape0.pts);
   if (g0 == null) return { ok: false, msg: 'gap pela tangente vale para flap e upperflap; o slat segue ponto a ponto.' };
@@ -244,12 +254,12 @@ export function assemble(elems, conv = DEFAULT_CONV) {
   order.forEach((i) => {
     if (refs[i] == null) return;
     const r = refs[i], a = out[r], b = out[i], kind = kinds[i];
-    const rule = placementRule(kind, elems[i].upAnchor);
+    const rule = placementRule(kind, elems[i].upAnchor, conv);
     const d = sub(b[rule.own], a[rule.refPt]);
     const dc = rotate(d, -a.theta);
     const md = polygonDistance(a.pts, b.pts);
     slots.push({
-      elem: i, ref: r, kind, upAnchor: kind === 'upperflap' ? (elems[i].upAnchor || 'bf') : null,
+      elem: i, ref: r, kind, upAnchor: kind === 'upperflap' ? upAnchorOf(conv, elems[i].upAnchor) : null, refPt: rule.refPt, own: rule.own,
       pair: kind === 'slat' ? [i + 1, r + 1] : [r + 1, i + 1], // slat: de montante para jusante
       from: a[rule.refPt], to: b[rule.own],
       overlapFlow: d[0] / rule.sx, gapFlow: d[1] / rule.sy, overlapChord: dc[0] / rule.sx, gapChord: dc[1] / rule.sy,

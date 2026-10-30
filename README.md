@@ -114,6 +114,17 @@ ZIP/XLSX, relatório Excel com gráficos, slat, Gurney parametrizado e migraçã
   Gap > 0 = acima (lado de pressão na asa invertida). Nomes DS_: `DS_gap{ref}{n}`, `DS_overlap{ref}{n}` ou `DS_stagger{ref}{n}`.
 - Para experimentar slat, upperflap e Gurney, use os botões *+ Adicionar slat*, *+ Adicionar upperflap* e *+ Definir Gurney flap* em Geometria (o exemplo padrão não traz nenhum deles).
 
+## Gap/Overlap entre os bordos de ataque
+
+Em **Geometria → Convenções → Gap/Overlap medidos a partir de**, escolha:
+
+- **BF_n → BA_(n+1)** (padrão, como as cotas DS_ do SolidWorks): `BA_flap = BF_ref + (−Overlap, −Gap)`;
+- **BA_n → BA_(n+1)** (distância entre os bordos de ataque): `BA_flap = BA_ref + (+Overlap, −Gap)`. Overlap = distância horizontal entre os BAs (> 0 = BA do flap a jusante); Gap = distância vertical (> 0 = lado de pressão). O upperflap passa a ser medido pelo BA; o slat não muda.
+
+Ao trocar, o app oferece converter os Gap/Overlap _ref para a montagem continuar igual (os níveis já digitados nas rodadas não são convertidos). As sugestões de Gap/Overlap são convertidas para a convenção escolhida. No SolidWorks, cote DS_gap/DS_overlap a partir do BA do elemento de referência.
+
+Amostras de perfil (botões em Geometria → Elementos): S1223, NACA 23012, E423 e FX 74-CL5-140.
+
 ## Gap/Overlap em fração da corda
 
 Em Geometria, cada elemento escolhe **Gap / Overlap em**: mm ou **fração da corda (x/c)**. Em fração, informe por exemplo `Gap_ref_1 / chord_1 = 0,01` (1 % da corda) e escolha a corda base: a do elemento de referência (padrão), a do próprio elemento ou a do principal. O app converte para mm (`Gap_1 = Gap_1/c · chord_base`) na montagem, nas cotas DS_ e nas exportações. No DOE, a variável passa a ser `Gap_1/c` e o `Gap_1` em mm vira coluna derivada: se a corda variar, o gap acompanha.

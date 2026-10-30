@@ -3,10 +3,10 @@ import * as store from '../store.js';
 import { wingOf, needs, swatch, pageHead } from '../common.js';
 import { geomPlot } from '../plots.js';
 import { setElementCount, syncDependentLists, addSlat, addUpperflap } from '../../core/model.js';
-import { resolveTopology } from '../../core/assembly.js';
-import { pairOf, gurneyConfigured, isRelGap, gapBaseIndex, pairName } from '../../core/wing.js';
+import { resolveTopology, leToLe } from '../../core/assembly.js';
+import { pairOf, gurneyConfigured, isRelGap, gapBaseIndex, pairName, setGapPoint } from '../../core/wing.js';
 import { applyReferenceStudy } from '../../core/demo.js';
-import { S1223_DAT, NACA23012_DAT } from '../../core/samples-data.js';
+import { S1223_DAT, NACA23012_DAT, E423_DAT, FX74CL5140_DAT } from '../../core/samples-data.js';
 import { describeTransform, directions, planeAxes, toPlane } from '../../core/transform.js';
 import { pivotLocal } from '../../core/pivots.js';
 import { DEG, rotate } from '../../core/geom.js';
@@ -144,12 +144,14 @@ function elementCard(pkg, i, w) {
     ? `BF do slat → BA do elemento ${pr.b}: Gap > 0 = lado de sucção (DS_gap${pr.a}${pr.b})`
     : pr.kind === 'upperflap'
       ? `${pr.anchor === 'ba' ? 'BA' : 'BF'} do elemento ${pr.a} → BA deste: Gap > 0 = acima (lado de pressão) (DS_gap${pr.a}${pr.b})`
-      : `BF do elemento ${pr.a} → BA deste: Gap > 0 = lado de pressão (DS_gap${pr.a}${pr.b})`;
+      : `${pr.anchor === 'ba' ? 'BA' : 'BF'} do elemento ${pr.a} → BA deste: Gap > 0 = lado de pressão (DS_gap${pr.a}${pr.b})`;
   const ovHint = !pr ? '' : pr.kind === 'slat'
     ? `Overlap > 0 = BF do slat a jusante do BA do ref (DS_overlap${pr.a}${pr.b})`
     : pr.kind === 'upperflap' && pr.anchor === 'ba'
       ? `Stagger: > 0 = BA deste a jusante do BA do ref (DS_stagger${pr.a}${pr.b})`
-      : `Overlap > 0 = BA a montante do BF do ref (DS_overlap${pr.a}${pr.b})`;
+      : pr.anchor === 'ba'
+        ? `Overlap: distância horizontal entre os BAs; > 0 = BA deste a jusante do BA do ref (DS_overlap${pr.a}${pr.b})`
+        : `Overlap > 0 = BA a montante do BF do ref (DS_overlap${pr.a}${pr.b})`;
   const removable = kind === 'slat' || kind === 'upperflap';
   return h('div', { class: 'el-card' },
     h('h3', null, swatch(i), `Elemento ${n}`, ' ', badge(kind, kind === 'slat' || kind === 'upperflap' ? 'info' : kind === 'principal' ? 'ok' : ''), el.profileName ? h('span', { class: 'muted' }, ` — ${el.profileName}`) : null,
@@ -157,7 +159,8 @@ function elementCard(pkg, i, w) {
     h('div', { class: 'fields' },
       selectField({ label: 'Tipo de elemento', value: kind, options: [['principal', 'Principal (ancorado)'], ['flap', 'Flap (a jusante do ref)'], ['slat', 'Slat (a montante do ref)'], ['upperflap', 'Upperflap (acima do ref)']], onChange: (v) => store.update(() => { if (v === 'principal') pkg.config.elements.forEach((e, j) => { if (j !== i && e.type === 'principal') e.type = 'flap'; }); el.type = v; el.ref = null; syncDependentLists(pkg.config); }, ['geometria', `${pkg.name} / elemento ${n}`, 'tipo', v]) }),
       kind !== 'principal' ? selectField({ label: 'Posicionado em relação a', value: String(tp.refs[i]), options: refOpts, onChange: (v) => setEl(pkg, i, 'ref', Number(v), 'referência') }) : null,
-      kind === 'upperflap' ? selectField({ label: 'Ponto de referência do upperflap', value: el.upAnchor === 'ba' ? 'ba' : 'bf', options: [['bf', 'BF do elemento de referência (Gap + Overlap)'], ['ba', 'BA do elemento de referência (Gap + Stagger)']], onChange: (v) => setEl(pkg, i, 'upAnchor', v, 'referência do upperflap') }) : null,
+      kind === 'upperflap' && leToLe(pkg.config.conventions) ? h('div', { class: 'field' }, h('label', null, 'Ponto de referência do upperflap'), h('span', { class: 'muted' }, 'BA do elemento de referência (Convenções: Gap/Overlap medidos entre os bordos de ataque)')) : null,
+      kind === 'upperflap' && !leToLe(pkg.config.conventions) ? selectField({ label: 'Ponto de referência do upperflap', value: el.upAnchor === 'ba' ? 'ba' : 'bf', options: [['bf', 'BF do elemento de referência (Gap + Overlap)'], ['ba', 'BA do elemento de referência (Gap + Stagger)']], onChange: (v) => setEl(pkg, i, 'upAnchor', v, 'referência do upperflap') }) : null,
       textField({ label: 'Nome do perfil', value: el.profileName, key: `pn${i}`, onChange: (v) => setEl(pkg, i, 'profileName', v, 'nome do perfil') }),
       selectField({ label: 'Coordenadas do .dat', value: el.inputMode, options: [['normalizado', 'Normalizadas (x/c)'], ['físico', 'Físicas (mm)']], onChange: (v) => setEl(pkg, i, 'inputMode', v, 'modo de entrada') }),
       numField({ label: `chord_ref_${n}`, unit: 'mm', value: el.chord_ref, required: true, key: `c${i}`, onChange: (v) => setEl(pkg, i, 'chord_ref', v, `chord_ref_${n}`), hint: el.inputMode === 'físico' && proc?.normalized ? `corda no arquivo: ${fv(proc.normalized.fileChord, 5)} mm` : null }),
@@ -170,6 +173,8 @@ function elementCard(pkg, i, w) {
       h('button', { onclick: async () => { const f = await pickFile('.dat,.txt,.csv'); if (f) loadDat(f.text, f.name); } }, 'Carregar .dat…'),
       h('button', { class: 'small', onclick: () => loadDat(S1223_DAT, 'S1223.dat') }, 'Amostra S1223'),
       h('button', { class: 'small', onclick: () => loadDat(NACA23012_DAT, 'NACA23012.dat') }, 'Amostra NACA 23012'),
+      h('button', { class: 'small', onclick: () => loadDat(E423_DAT, 'E423.dat') }, 'Amostra E423'),
+      h('button', { class: 'small', onclick: () => loadDat(FX74CL5140_DAT, 'FX74_CL5_140.dat') }, 'Amostra FX 74-CL5-140'),
       el.datFileName ? h('span', { class: 'muted' }, `arquivo: ${el.datFileName}`) : badge('sem .dat', 'warn'),
       h('span', { class: 'spacer' }),
       checkField({ label: 'Alinhar corda BA–BF ao eixo x', checked: el.alignChord !== false, onChange: (v) => setEl(pkg, i, 'alignChord', v, 'alinhar corda') })),
@@ -244,7 +249,7 @@ function measurements(pkg, w) {
       { label: 'Folga real', unit: 'mm', num: true, get: (s) => (s.clearance === 0 ? badge('INTERSEÇÃO', 'err') : gapCell(fmt(s.clearance, 3), cv.gapDef === 'minimo')) },
       { label: 'Overlap escoam.', unit: 'mm', num: true, get: (s) => fmt(s.overlapFlow, 3) },
       { label: 'Gap eixos do ref', unit: 'mm', num: true, get: (s) => gapCell(fmt(s.gapChord, 3), cv.gapDef === 'ponto' && cv.gapAxes === 'corda') }, { label: 'Overlap eixos do ref', unit: 'mm', num: true, get: (s) => fmt(s.overlapChord, 3) },
-    ], w.asm.slots), h('p', { class: 'muted', style: { margin: '6px 0 0' } }, 'Medidas do gap: ponto a ponto (BF do ref → BA do elemento, na vertical), tangente (BF do ref → reta horizontal tangente ao extradorso do flap), tangente livre (ponto mais baixo do ref sobre o flap → mesma tangente; > 0 garante que não há interseção) e folga real (menor distância entre os contornos). Em destaque, a que está comandando a montagem (Convenções → Definição do gap).')) : null,
+    ], w.asm.slots), h('p', { class: 'muted', style: { margin: '6px 0 0' } }, `Medidas do gap: ponto a ponto (${leToLe(cv) ? 'BA do ref → BA do elemento, na vertical; overlap = distância horizontal entre os BAs' : 'BF do ref → BA do elemento, na vertical'}), tangente (BF do ref → reta horizontal tangente ao extradorso do flap), tangente livre (ponto mais baixo do ref sobre o flap → mesma tangente; > 0 garante que não há interseção) e folga real (menor distância entre os contornos). Em destaque, a que está comandando a montagem (Convenções → Definição do gap).`)) : null,
     h('h3', null, 'Verificações'),
     w.asm.checks.length ? msgs(w.asm.checks) : msgs([{ level: 'ok', msg: 'Sem interseções, pivôs dentro dos perfis e cotas válidas para o SolidWorks.' }]),
     h('p', { class: 'muted' }, `Coordenadas no plano ${t.plane} do CAD. Vista: roda do mouse = zoom, arrastar = mover. Linha vermelha = folga mínima da fenda.`));
@@ -269,10 +274,14 @@ function liveControls(pkg, plotBox, measBox, plot) {
       r.addEventListener('change', () => store.update(() => { }, ['geometria', `${pkg.name} / elemento ${n}`, `${label} (controle deslizante)`, r.value]));
       return h('div', { class: 'row', style: { flexWrap: 'nowrap' } }, h('span', { style: { width: '90px' } }, label), r, out);
     };
+    // flap medido entre os BAs: Overlap ~ corda do ref, Gap ~ c·sen(AoA_ref) + folga
+    const pr = pairOf(pkg, n), ba = pr?.kind === 'flap' && pr.anchor === 'ba';
+    const cb = Number(c.elements[isRelGap(el) ? gapBaseIndex(pkg, i) : pr ? pr.a - 1 : i]?.chord_ref) || 100, f = isRelGap(el) ? 1 : cb;
+    const rg = (a, b, step) => [+(a * f).toPrecision(3), +(b * f).toPrecision(3), isRelGap(el) ? 0.001 : step];
     return h('div', { class: 'el-card' }, h('h3', null, swatch(i), `Elemento ${n}`),
       mk('aoa_ref', `AoA_${n}`, -45, 60, 0.5, '°'),
-      pairOf(pkg, n) ? (isRelGap(el) ? mk('gapc_ref', `${pairName(pkg, n, 'Gap')}/c`, 0.001, 0.15, 0.001, 'x/c') : mk('gap_ref', pairName(pkg, n, 'Gap'), 0.1, 25, 0.1, 'mm')) : null,
-      pairOf(pkg, n) ? (isRelGap(el) ? mk('overlapc_ref', `${pairName(pkg, n, 'Overlap')}/c`, 0.001, 0.15, 0.001, 'x/c') : mk('overlap_ref', pairName(pkg, n, 'Overlap'), 0.1, 20, 0.1, 'mm')) : null,
+      pr ? (isRelGap(el) ? mk('gapc_ref', `${pairName(pkg, n, 'Gap')}/c`, ...(ba ? rg(0.001, 0.5) : [0.001, 0.15, 0.001]), 'x/c') : mk('gap_ref', pairName(pkg, n, 'Gap'), ...(ba ? rg(0.001, 0.5, 0.1) : [0.1, 25, 0.1]), 'mm')) : null,
+      pr ? (isRelGap(el) ? mk('overlapc_ref', `${pairName(pkg, n, 'Overlap')}/c`, ...(ba ? rg(0.5, 1.2) : [0.001, 0.15, 0.001]), 'x/c') : mk('overlap_ref', pairName(pkg, n, 'Overlap'), ...(ba ? rg(0.5, 1.2, 0.1) : [0.1, 20, 0.1]), 'mm')) : null,
       mk('chord_ref', `chord_${n}`, 10, 400, 1, 'mm'));
   });
   void plotBox;
@@ -524,7 +533,11 @@ function conventionsTab(pkg) {
         selectField({ label: 'Modo de montagem', value: cv.assemblyMode, options: [['sequencial', 'Sequencial: BA_(n+1) posicionado pelo BF_n (SolidWorks DS_)'], ['pivoFixo', 'Pivô fixo: monta com AoA = 0 e gira cada elemento no pivô']], onChange: (v) => set('assemblyMode', v, 'modo') }),
         selectField({ label: 'Origem', value: cv.anchor, options: [['pivo1', 'Pivô do elemento 1 na origem (DS_)'], ['ba1', 'BA do elemento 1 na origem']], onChange: (v) => set('anchor', v, 'origem') }),
         selectField({ label: 'Eixos de gap/overlap', value: cv.gapAxes, options: [['escoamento', 'Eixos do escoamento (horizontal/vertical, DS_)'], ['corda', 'Eixos da corda do elemento n (o de cima do par)']], onChange: (v) => set('gapAxes', v, 'eixos gap/overlap') }),
-        selectField({ label: 'Definição do gap', value: cv.gapDef, options: [['ponto', 'Ponto a ponto: BF_n → BA_(n+1) (DS_)'], ['minimo', 'Folga mínima entre contornos (largura da fenda)'], ['tangente', 'Vertical: BF_n → tangente horizontal ao extradorso do elemento n+1'], ['tangenteLivre', 'Vertical livre: ponto mais baixo do elemento n → tangente ao extradorso do elemento n+1 (Gap > 0 = sem interseção)']], onChange: (v) => set('gapDef', v, 'definição do gap') }),
+        selectField({ label: 'Gap/Overlap medidos a partir de', value: cv.gapPoint === 'ba' ? 'ba' : 'bf', options: [['bf', 'BF_n → BA_(n+1) (DS_)'], ['ba', 'BA_n → BA_(n+1): distância entre os bordos de ataque']], onChange: async (v) => {
+          const keep = await confirmBox('Medir Gap/Overlap ' + (v === 'ba' ? 'entre os bordos de ataque' : 'a partir do BF'), 'Converter os valores de referência (Gap/Overlap _ref) para manter a geometria atual? Os níveis já digitados nas rodadas não são convertidos. Cancelar = só trocar a convenção (os mesmos números passam a ser medidos do novo ponto).', 'Converter');
+          store.update(() => { setGapPoint(pkg, v, keep); }, ['geometria', pkg.name, 'convenção ponto de gap/overlap', `${v}${keep ? ' (valores _ref convertidos)' : ''}`]);
+        } }),
+        selectField({ label: 'Definição do gap', value: cv.gapDef, options: [['ponto', `Ponto a ponto: ${leToLe(cv) ? 'BA_n' : 'BF_n'} → BA_(n+1)${leToLe(cv) ? '' : ' (DS_)'}`], ['minimo', 'Folga mínima entre contornos (largura da fenda)'], ['tangente', `Vertical: ${leToLe(cv) ? 'BA_n' : 'BF_n'} → tangente horizontal ao extradorso do elemento n+1`], ['tangenteLivre', 'Vertical livre: ponto mais baixo do elemento n → tangente ao extradorso do elemento n+1 (Gap > 0 = sem interseção)']], onChange: (v) => set('gapDef', v, 'definição do gap') }),
         selectField({ label: 'Lado do pivot_off', value: cv.pivotSide, options: [['succao', 'Lado de sucção (DS_)'], ['pressao', 'Lado de pressão']], onChange: (v) => set('pivotSide', v, 'lado do pivô') }),
         selectField({ label: 'pivot_dTE medido', value: cv.pivotDTE, options: [['euclidiana', 'Distância pivô–BF (euclidiana, DS_)'], ['corda', 'Ao longo da corda a partir do BF']], onChange: (v) => set('pivotDTE', v, 'pivot_dTE') }),
         selectField({ label: 'Sinal do AoA', value: String(cv.aoaSign), options: [['1', '+ aumenta a sustentação (BF para cima na asa invertida, DS_)'], ['-1', '+ diminui a sustentação']], onChange: (v) => set('aoaSign', Number(v), 'sinal do AoA') }),
@@ -541,9 +554,12 @@ Rotação (AoA absoluto, θ = −σ·AoA):
 
 Elemento 1:  T = 0 (pivô 1 na origem)  ou  T = R(θ)·P_local (BA 1 na origem)
 Gap_n e Overlap_n: entre o elemento n e o elemento n+1 (ex.: Gap_1 = entre os elementos 1 e 2)
-Elemento n+1 (sequencial):  BA_(n+1) = BF_n + (−Overlap_n, −Gap_n)
+${leToLe(cv) ? `Elemento n+1 (sequencial, medido entre os BAs):  BA_(n+1) = BA_n + (+Overlap_n, −Gap_n)
   (eixos do escoamento; nos eixos da corda n o vetor é girado por θ_n)
-  ⇒ Overlap > 0: BA_(n+1) a montante do BF_n;  Gap > 0: BA_(n+1) do lado de pressão do BF_n
+  ⇒ Overlap > 0: BA_(n+1) a jusante do BA_n;  Gap > 0: BA_(n+1) do lado de pressão do BA_n
+  (slat: BF_slat = BA_ref + (+Overlap, +Gap), sem mudança)` : `Elemento n+1 (sequencial):  BA_(n+1) = BF_n + (−Overlap_n, −Gap_n)
+  (eixos do escoamento; nos eixos da corda n o vetor é girado por θ_n)
+  ⇒ Overlap > 0: BA_(n+1) a montante do BF_n;  Gap > 0: BA_(n+1) do lado de pressão do BF_n`}
 Pivô fixo: monta com AoA = 0 e depois gira cada elemento em torno do próprio pivô.
 Gap como folga mínima: desloca BA_(n+1) na direção normal até min dist(contorno n, contorno n+1) = Gap_n (bissecção).
 Gap pela tangente: Gap_n = y(BF_n) − max y(extradorso_(n+1))  (desloca o elemento n+1 só na vertical; o overlap não muda).
