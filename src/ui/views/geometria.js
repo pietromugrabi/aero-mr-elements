@@ -144,12 +144,16 @@ function elementCard(pkg, i, w) {
   const dsOv = pr && pr.kind === 'upperflap' && pr.anchor === 'ba' ? 'stagger' : 'overlap';
   const gapHint = !pr ? '' : pr.kind === 'slat'
     ? `BF do slat → BA do elemento ${pr.b}: Gap > 0 = lado de sucção (DS_gap${pr.a}${pr.b})`
-    : pr.kind === 'upperflap'
+    : pr.direct
+      ? `Altura: distância só na vertical (Y) do BA do principal ao BA deste; > 0 = acima (DS_gap${pr.a}${pr.b})`
+      : pr.kind === 'upperflap'
       ? `${pr.anchor === 'ba' ? 'BA' : 'BF'} do elemento ${pr.a} → BA deste: Gap > 0 = acima (lado de pressão) (DS_gap${pr.a}${pr.b})`
       : `${pr.anchor === 'ba' ? 'BA' : 'BF'} do elemento ${pr.a} → BA deste: Gap > 0 = lado de pressão (DS_gap${pr.a}${pr.b})`;
   const ovHint = !pr ? '' : pr.kind === 'slat'
     ? `Overlap > 0 = BF do slat a jusante do BA do ref (DS_overlap${pr.a}${pr.b})`
-    : pr.kind === 'upperflap' && pr.anchor === 'ba'
+    : pr.direct
+      ? `Posição longitudinal: distância só na horizontal (X) do BA do principal ao BA deste; > 0 = a jusante (DS_stagger${pr.a}${pr.b})`
+      : pr.kind === 'upperflap' && pr.anchor === 'ba'
       ? `Stagger: > 0 = BA deste a jusante do BA do ref (DS_stagger${pr.a}${pr.b})`
       : pr.anchor === 'ba'
         ? `Overlap: distância horizontal entre os BAs; > 0 = BA deste a jusante do BA do ref (DS_overlap${pr.a}${pr.b})`
@@ -161,8 +165,8 @@ function elementCard(pkg, i, w) {
     h('div', { class: 'fields' },
       selectField({ label: 'Tipo de elemento', value: kind, options: [['principal', 'Principal (ancorado)'], ['flap', 'Flap (a jusante do ref)'], ['slat', 'Slat (a montante do ref)'], ['upperflap', 'Upperflap (acima do ref)']], onChange: (v) => store.update(() => { if (v === 'principal') pkg.config.elements.forEach((e, j) => { if (j !== i && e.type === 'principal') e.type = 'flap'; }); el.type = v; el.ref = null; syncDependentLists(pkg.config); }, ['geometria', `${pkg.name} / elemento ${n}`, 'tipo', v]) }),
       kind !== 'principal' ? selectField({ label: 'Posicionado em relação a', value: String(tp.refs[i]), options: refOpts, onChange: (v) => setEl(pkg, i, 'ref', Number(v), 'referência') }) : null,
-      kind === 'upperflap' && leToLe(pkg.config.conventions) ? h('div', { class: 'field' }, h('label', null, 'Ponto de referência do upperflap'), h('span', { class: 'muted' }, 'BA do elemento de referência (Convenções: Gap/Overlap medidos entre os bordos de ataque)')) : null,
-      kind === 'upperflap' && !leToLe(pkg.config.conventions) ? selectField({ label: 'Ponto de referência do upperflap', value: el.upAnchor === 'ba' ? 'ba' : 'bf', options: [['bf', 'BF do elemento de referência (Gap + Overlap)'], ['ba', 'BA do elemento de referência (Gap + Stagger)']], onChange: (v) => setEl(pkg, i, 'upAnchor', v, 'referência do upperflap') }) : null,
+      kind === 'upperflap' && (pr?.direct || leToLe(pkg.config.conventions)) ? h('div', { class: 'field' }, h('label', null, 'Ponto de referência do upperflap'), h('span', { class: 'muted' }, pr?.direct ? 'BA do principal → BA deste: Gap = altura (só Y), Overlap = posição longitudinal (só X), independentes entre si e das demais convenções' : 'BA do elemento de referência (Convenções: Gap/Overlap medidos entre os bordos de ataque)')) : null,
+      kind === 'upperflap' && !pr?.direct && !leToLe(pkg.config.conventions) ? selectField({ label: 'Ponto de referência do upperflap', value: el.upAnchor === 'ba' ? 'ba' : 'bf', options: [['bf', 'BF do elemento de referência (Gap + Overlap)'], ['ba', 'BA do elemento de referência (Gap + Stagger)']], onChange: (v) => setEl(pkg, i, 'upAnchor', v, 'referência do upperflap') }) : null,
       textField({ label: 'Nome do perfil', value: el.profileName, key: `pn${i}`, onChange: (v) => setEl(pkg, i, 'profileName', v, 'nome do perfil') }),
       selectField({ label: 'Coordenadas do .dat', value: el.inputMode, options: [['normalizado', 'Normalizadas (x/c)'], ['físico', 'Físicas (mm)']], onChange: (v) => setEl(pkg, i, 'inputMode', v, 'modo de entrada') }),
       numField({ label: `chord_ref_${n}`, unit: 'mm', value: el.chord_ref, required: true, key: `c${i}`, onChange: (v) => setEl(pkg, i, 'chord_ref', v, `chord_ref_${n}`), hint: el.inputMode === 'físico' && proc?.normalized ? `corda no arquivo: ${fv(proc.normalized.fileChord, 5)} mm` : null }),
@@ -219,7 +223,7 @@ function assemblyScene(pkg, w) {
   const t = pkg.config.transform, d = directions(t), gapDef = pkg.config.conventions?.gapDef || 'ponto';
   // gap pela tangente: reta horizontal tangente ao elemento e cota vertical do gap (no plano do CAD)
   const tanOf = (s) => {
-    const c = gapDef === 'tangente' ? s.tanBF : gapDef === 'tangenteLivre' ? s.tanFree : null;
+    const c = s.direct ? null : gapDef === 'tangente' ? s.tanBF : gapDef === 'tangenteLivre' ? s.tanFree : null; // 1º upperflap: cota BA → BA
     return c && { value: c.value, tangent: toPlane(c.tangent, t), from: toPlane(c.from, t), foot: toPlane(c.foot, t), line: c.line.map((p) => toPlane(p, t)) };
   };
   return {
@@ -245,12 +249,12 @@ function measurements(pkg, w) {
     ], w.plane),
     w.asm.slots.length ? h('div', { style: { marginTop: '10px' } }, table([
       { label: 'Par', get: (s) => `${s.pair[0]}–${s.pair[1]}${s.kind === 'slat' ? ' (slat)' : ''}` },
-      { label: 'Gap ponto a ponto', unit: 'mm', num: true, get: (s) => gapCell(fmt(s.gapFlow, 3), cv.gapDef === 'ponto' && cv.gapAxes !== 'corda') },
-      { label: 'Gap tangente', unit: 'mm', num: true, get: (s) => (s.gapTangent == null ? h('span', { class: 'muted', title: 'Não se aplica ao slat' }, '—') : gapCell(fmt(s.gapTangent, 3), cv.gapDef === 'tangente' && s.kind !== 'slat')) },
-      { label: 'Gap tangente livre', unit: 'mm', num: true, get: (s) => (s.gapTangentClear == null ? h('span', { class: 'muted', title: 'Não se aplica ao slat' }, '—') : gapCell(fmt(s.gapTangentClear, 3), cv.gapDef === 'tangenteLivre' && s.kind !== 'slat')) },
-      { label: 'Folga real', unit: 'mm', num: true, get: (s) => (s.clearance === 0 ? badge('INTERSEÇÃO', 'err') : gapCell(fmt(s.clearance, 3), cv.gapDef === 'minimo')) },
+      { label: 'Gap ponto a ponto', unit: 'mm', num: true, get: (s) => gapCell(fmt(s.gapFlow, 3), s.direct || (cv.gapDef === 'ponto' && cv.gapAxes !== 'corda')) },
+      { label: 'Gap tangente', unit: 'mm', num: true, get: (s) => (s.gapTangent == null ? h('span', { class: 'muted', title: 'Não se aplica ao slat' }, '—') : gapCell(fmt(s.gapTangent, 3), !s.direct && cv.gapDef === 'tangente' && s.kind !== 'slat')) },
+      { label: 'Gap tangente livre', unit: 'mm', num: true, get: (s) => (s.gapTangentClear == null ? h('span', { class: 'muted', title: 'Não se aplica ao slat' }, '—') : gapCell(fmt(s.gapTangentClear, 3), !s.direct && cv.gapDef === 'tangenteLivre' && s.kind !== 'slat')) },
+      { label: 'Folga real', unit: 'mm', num: true, get: (s) => (s.clearance === 0 ? badge('INTERSEÇÃO', 'err') : gapCell(fmt(s.clearance, 3), !s.direct && cv.gapDef === 'minimo')) },
       { label: 'Overlap escoam.', unit: 'mm', num: true, get: (s) => fmt(s.overlapFlow, 3) },
-      { label: 'Gap eixos do ref', unit: 'mm', num: true, get: (s) => gapCell(fmt(s.gapChord, 3), cv.gapDef === 'ponto' && cv.gapAxes === 'corda') }, { label: 'Overlap eixos do ref', unit: 'mm', num: true, get: (s) => fmt(s.overlapChord, 3) },
+      { label: 'Gap eixos do ref', unit: 'mm', num: true, get: (s) => gapCell(fmt(s.gapChord, 3), !s.direct && cv.gapDef === 'ponto' && cv.gapAxes === 'corda') }, { label: 'Overlap eixos do ref', unit: 'mm', num: true, get: (s) => fmt(s.overlapChord, 3) },
     ], w.asm.slots), h('p', { class: 'muted', style: { margin: '6px 0 0' } }, `Medidas do gap: ponto a ponto (${leToLe(cv) ? 'BA do ref → BA do elemento, na vertical; overlap = distância horizontal entre os BAs' : 'BF do ref → BA do elemento, na vertical'}), tangente (BF do ref → reta horizontal tangente ao extradorso do flap), tangente livre (ponto mais baixo do ref sobre o flap → mesma tangente; > 0 garante que não há interseção) e folga real (menor distância entre os contornos). Em destaque, a que está comandando a montagem (Convenções → Definição do gap).`)) : null,
     h('h3', null, 'Verificações'),
     w.asm.checks.length ? msgs(w.asm.checks) : msgs([{ level: 'ok', msg: 'Sem interseções, pivôs dentro dos perfis e cotas válidas para o SolidWorks.' }]),

@@ -1,7 +1,7 @@
 // Integração: configuração do pacote (+ entradas de um Design Point) → geometria montada no CAD.
 
 import { processProfile, elementLocal } from './profile.js';
-import { assemble, DEFAULT_CONV, resolveTopology, placementRule, tangentGap, upAnchorOf, leToLe } from './assembly.js';
+import { assemble, DEFAULT_CONV, resolveTopology, placementRule, tangentGap, upAnchorOf, leToLe, isDirectUpper } from './assembly.js';
 import { scalePivot } from './pivots.js';
 import { toPlane, DEFAULT_TRANSFORM } from './transform.js';
 import { bbox, sub, rotate } from './geom.js';
@@ -73,7 +73,7 @@ export function pairOf(pkg, n) {
   const r = tp.refs[i] + 1;
   if (tp.kinds[i] === 'slat') return { kind: 'slat', a: n, b: r };
   const conv = pkg.config.conventions;
-  if (tp.kinds[i] === 'upperflap') return { kind: 'upperflap', a: r, b: n, anchor: upAnchorOf(conv, pkg.config.elements[i].upAnchor) };
+  if (tp.kinds[i] === 'upperflap') return { kind: 'upperflap', a: r, b: n, direct: isDirectUpper(tp, i), anchor: isDirectUpper(tp, i) ? 'ba' : upAnchorOf(conv, pkg.config.elements[i].upAnchor) };
   return { kind: 'flap', a: r, b: n, anchor: leToLe(conv) ? 'ba' : 'bf' };
 }
 
@@ -198,7 +198,7 @@ export function gapsInConvention(pkg, gapPoint) {
   const conv = { ...w.conv, gapPoint }, els = w.asm.elements;
   return pkg.config.elements.map((el, i) => {
     const e = els[i];
-    if (e.ref == null) return null;
+    if (e.ref == null || isDirectUpper(w.asm.topology, i)) return null; // 1º upperflap: sempre BA → BA, não muda
     const a = els[e.ref], rule = placementRule(e.kind, el.upAnchor, conv);
     const d = sub(e[rule.own], a[rule.refPt]), v = conv.gapAxes === 'corda' ? rotate(d, -a.theta) : d;
     const gap = conv.gapDef === 'ponto' ? v[1] / rule.sy : conv.gapDef === 'tangente' ? tangentGap(e.kind, a[rule.refPt], e.pts) : null;

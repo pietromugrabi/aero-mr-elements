@@ -11,6 +11,9 @@
 //      'bf' → BA_up = BF_ref + (−overlap, −gap)  (Overlap > 0: BA a montante do BF do ref)
 //      'ba' → BA_up = BA_ref + (+stagger, −gap)  (Stagger = Overlap_n; > 0: BA a jusante do BA do ref)
 //    Gap > 0: lado de pressão (acima, no CAD padrão da asa invertida).
+//    O 1º upperflap (ref = principal) é SEMPRE 'ba', nos eixos do escoamento e com o gap ponto a ponto:
+//    Overlap = só a distância horizontal e Gap = só a vertical entre os BAs (ver isDirectUpper).
+//    Um upperflap encadeado em outro segue a regra escolhida (padrão: BF do upperflap anterior).
 //  - gapPoint 'ba' (convenção global): Gap/Overlap medidos entre os bordos de ataque:
 //      flap e upperflap → BA_n = BA_ref + (+overlap, −gap)  (Overlap > 0: BA a jusante do BA do ref;
 //      Gap > 0: BA do lado de pressão do BA do ref). O slat continua BF_slat = BA_ref + (+overlap, +gap).
@@ -88,6 +91,19 @@ export function resolveTopology(list) {
     for (let i = 0; i < n; i++) if (!placed.has(i)) { errors.push(`Elemento ${i + 1}: referência circular; posicionado em relação ao principal.`); refs[i] = principal; order.push(i); placed.add(i); }
   }
   return { kinds, refs, principal, order, errors };
+}
+
+/**
+ * 1º upperflap (upperflap posicionado em relação ao principal): Gap e Overlap são as coordenadas do BA
+ * dele em relação ao BA do principal — Overlap só em x (escoamento), Gap só em y (> 0 = lado de
+ * pressão, acima no CAD). Vale com qualquer convenção (eixos, definição do gap, ponto, modo de montagem).
+ */
+export const isDirectUpper = (topo, i) => topo.kinds[i] === 'upperflap' && topo.refs[i] === topo.principal;
+const DIRECT_CONV = Object.freeze({ gapAxes: 'escoamento' });
+
+function translateShape(s, d) {
+  const mv = (p) => add(p, d);
+  return { ...s, pts: s.pts.map(mv), le: mv(s.le), te: mv(s.te), pivot: mv(s.pivot), tf: s.tf && ((p) => mv(s.tf(p))) };
 }
 
 function placeShape(local, chord, piv, theta, translation) {
@@ -198,6 +214,7 @@ export function assemble(elems, conv = DEFAULT_CONV) {
   const topo = resolveTopology(elems);
   topo.errors.forEach((m) => checks.push({ level: 'erro', elem: null, msg: m }));
   const { kinds, refs, principal, order } = topo;
+  const direct = elems.map((_, i) => isDirectUpper(topo, i));
 
   const pivots = elems.map((e, i) => {
     const r = pivotLocal(e.chord, e.pivotOff, e.pivotDTE, conv);
@@ -216,6 +233,10 @@ export function assemble(elems, conv = DEFAULT_CONV) {
         return;
       }
       const ref = placed[refs[i]];
+      if (direct[i]) { // 1º upperflap: BA_up = BA_principal + (+Overlap, −Gap), só X e só Y, sempre
+        placed[i] = { ...placeRelative({ ...e, upAnchor: 'ba' }, kinds[i], piv, theta, ref, DIRECT_CONV, e.gap), theta };
+        return;
+      }
       let shape = placeRelative(e, kinds[i], piv, theta, ref, conv, e.gap);
       if (conv.gapDef === 'minimo') {
         const solved = solveMinGap(e, kinds[i], piv, theta, ref, conv);
@@ -236,6 +257,14 @@ export function assemble(elems, conv = DEFAULT_CONV) {
       const theta = -sgn * e.aoa * DEG;
       return { ...placeShape(e.local, e.chord, pivots[i], theta, base[i].pivot), theta };
     });
+    // 1º upperflap: girar no pivô move o BA; translada para o BA voltar a BA_principal + (+Overlap, −Gap)
+    // (os elementos encadeados nele acompanham o mesmo deslocamento)
+    const shift = new Array(elems.length).fill(null);
+    order.forEach((i) => {
+      if (refs[i] == null) return;
+      shift[i] = direct[i] ? sub(add(placed[refs[i]].le, [elems[i].overlap, -elems[i].gap]), placed[i].le) : shift[refs[i]];
+      if (shift[i]) placed[i] = translateShape(placed[i], shift[i]);
+    });
   } else {
     placed = build((i) => elems[i].aoa);
   }
@@ -254,12 +283,12 @@ export function assemble(elems, conv = DEFAULT_CONV) {
   order.forEach((i) => {
     if (refs[i] == null) return;
     const r = refs[i], a = out[r], b = out[i], kind = kinds[i];
-    const rule = placementRule(kind, elems[i].upAnchor, conv);
+    const rule = placementRule(kind, direct[i] ? 'ba' : elems[i].upAnchor, conv);
     const d = sub(b[rule.own], a[rule.refPt]);
     const dc = rotate(d, -a.theta);
     const md = polygonDistance(a.pts, b.pts);
     slots.push({
-      elem: i, ref: r, kind, upAnchor: kind === 'upperflap' ? upAnchorOf(conv, elems[i].upAnchor) : null, refPt: rule.refPt, own: rule.own,
+      elem: i, ref: r, kind, upAnchor: kind === 'upperflap' ? (direct[i] ? 'ba' : upAnchorOf(conv, elems[i].upAnchor)) : null, direct: direct[i], refPt: rule.refPt, own: rule.own,
       pair: kind === 'slat' ? [i + 1, r + 1] : [r + 1, i + 1], // slat: de montante para jusante
       from: a[rule.refPt], to: b[rule.own],
       overlapFlow: d[0] / rule.sx, gapFlow: d[1] / rule.sy, overlapChord: dc[0] / rule.sx, gapChord: dc[1] / rule.sy,

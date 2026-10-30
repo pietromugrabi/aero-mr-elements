@@ -67,10 +67,11 @@ function summarySheet(project, pkg, run, opts) {
   rows.push([]);
   rows.push(sec('Convenções de montagem'));
   const cv = c.conventions;
+  const UPPER_TXT = '1º upperflap: BA_up = BA_principal + (+Overlap, −Gap) — Overlap só em X, Gap só em Y (altura); encadeado: BA = BF_ref + (−Overlap, −Gap) ou pelo BA; Gap > 0 = acima (pressão)';
   [['Modo', cv.assemblyMode === 'pivoFixo' ? 'pivô fixo' : 'sequencial (SolidWorks DS_)'], ['Gap/overlap', `${cv.gapDef === 'minimo' ? 'gap = folga mínima' : cv.gapDef === 'tangente' ? 'gap = vertical do BF até a tangente horizontal ao extradorso' : cv.gapDef === 'tangenteLivre' ? 'gap = vertical do ponto mais baixo do ref até a tangente horizontal ao extradorso (sem interseção)' : 'ponto a ponto'}, eixos ${cv.gapAxes === 'corda' ? 'da corda do ref' : 'do escoamento'}`],
     ...(cv.gapPoint === 'ba'
-      ? [['Flap', 'BA_flap = BA_ref + (+Overlap, −Gap) (medidos entre os bordos de ataque)'], ['Slat', 'BF_slat = BA_ref + (+Overlap, +Gap)'], ['Upperflap', 'BA_up = BA_ref + (+Stagger, −Gap); Gap > 0 = acima (pressão)']]
-      : [['Flap', 'BA_flap = BF_ref + (−Overlap, −Gap)'], ['Slat', 'BF_slat = BA_ref + (+Overlap, +Gap)'], ['Upperflap', 'BA_up = BF_ref + (−Overlap, −Gap) ou BA_ref + (+Stagger, −Gap); Gap > 0 = acima (pressão)']]), ['Pivô', `pivot_dTE ${cv.pivotDTE === 'corda' ? 'ao longo da corda' : 'euclidiano pivô–BF'}, lado ${cv.pivotSide === 'pressao' ? 'pressão' : 'sucção'}`],
+      ? [['Flap', 'BA_flap = BA_ref + (+Overlap, −Gap) (medidos entre os bordos de ataque)'], ['Slat', 'BF_slat = BA_ref + (+Overlap, +Gap)'], ['Upperflap', UPPER_TXT]]
+      : [['Flap', 'BA_flap = BF_ref + (−Overlap, −Gap)'], ['Slat', 'BF_slat = BA_ref + (+Overlap, +Gap)'], ['Upperflap', UPPER_TXT]]), ['Pivô', `pivot_dTE ${cv.pivotDTE === 'corda' ? 'ao longo da corda' : 'euclidiano pivô–BF'}, lado ${cv.pivotSide === 'pressao' ? 'pressão' : 'sucção'}`],
     ['Corda', cv.chordDef === 'geometrica' ? 'geométrica (BA → extremo do BF arredondado)' : 'clássica'], ['Pivôs no DOE', run.doe?.pivotScaling !== false ? 'escalados com a corda' : 'fixos (valores de referência)']].forEach(([k, v]) => rows.push([{ v: k, s: XS.header }, v]));
   if (w.plane) {
     const dom = computeDomain(w.bbox, w.plane.map((e) => e.chord), c.domain, c.transform.sx);
