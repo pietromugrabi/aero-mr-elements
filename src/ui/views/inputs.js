@@ -191,6 +191,12 @@ export default function inputs(ctx) {
     h('div', { class: 'row', style: { marginBottom: '8px' } }, qi,
       h('button', { class: 'small', onclick: () => store.update(() => { const last = run.dps[run.dps.length - 1]; run.dps.push({ id: uid('dp'), name: `DP ${run.dps.length}`, status: 'pendente', notes: '', inputs: withDerivedPivots(pkg, { ...(last ? last.inputs : base) }, doe.pivotScaling !== false), outputs: null }); }, ['DOE', run.name, 'linha adicionada']) }, '+ Linha'),
       h('button', { class: 'small danger', disabled: !sel.size || null, onclick: async () => { if (await confirmBox('Excluir DPs', `Excluir ${sel.size} DP(s) selecionado(s)?`, 'Excluir', true)) { store.update(() => { run.dps = run.dps.filter((d) => !sel.has(d.id)); }, ['DOE', run.name, `${sel.size} DP(s) excluído(s)`]); sel.clear(); } } }, `Excluir selecionados (${sel.size})`),
+      h('button', { class: 'small danger', disabled: !run.dps.length || null, onclick: async () => {
+        const n = run.dps.length, withRes = run.dps.filter((d) => d.outputs).length;
+        if (!(await confirmBox('Excluir todos os DPs', `Excluir todos os ${n} DP(s) da rodada "${run.name}"?${withRes ? ` ${withRes} deles têm resultados, que serão apagados.` : ''} O planejamento (variáveis e níveis) é mantido.`, 'Excluir todos', true))) return;
+        store.update(() => { run.dps = []; }, ['DOE', run.name, `todos os ${n} DP(s) excluídos`]);
+        sel.clear(); ui.checks = null;
+      } }, `Excluir todos (${run.dps.length})`),
       h('button', { class: 'small', disabled: !dups.size || null, onclick: () => store.update(() => { const d = findDuplicates(run.dps.map((x) => x.inputs), vars.map((v) => v.key)); run.dps = run.dps.filter((_, i) => !d.has(i)); }, ['DOE', run.name, `${dups.size} duplicado(s) removido(s)`]) }, `Remover duplicados (${dups.size})`),
       h('button', { class: 'small', onclick: () => store.update(() => { run.dps.forEach((d, i) => { d.name = `DP ${i}`; }); }, ['DOE', run.name, 'DPs renumerados']) }, 'Renumerar'),
       h('span', { class: 'spacer' }),
