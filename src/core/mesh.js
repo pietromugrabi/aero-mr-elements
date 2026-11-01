@@ -76,7 +76,7 @@ export function meshSuggestions(ctx) {
   const gur = (ctx.gurney || []).map((g) => (g ? Math.min(g.t / 4, g.h / 10) : null));
   return {
     perElement, slotSize: slots, gurneySize: gur,
-    globalMax: C * 0.5, wakeSize: C * 0.01, wakeLength: 2, groundSize: C * 0.02, flapSize: Math.min(...chords) * 0.004,
+    globalMax: C / 20, wakeSize: C * 0.01, wakeLength: 2, groundSize: C * 0.02, flapSize: Math.min(...chords) * 0.004,
     note: 'Sugestões heurísticas (placa plana para y+, frações da corda para tamanhos). Confirme com estudo de independência de malha e verifique y+ no Fluent após a solução.',
   };
 }

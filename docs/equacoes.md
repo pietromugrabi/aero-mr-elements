@@ -138,7 +138,7 @@ N camadas: menor N com y₁·(gᴺ − 1)/(g − 1) ≥ δ  (limitado a 10…40)
 ```
 
 Tamanhos: edge 0,5 % c, BA 0,1 % c, BF π·r/12, fenda = folga/15, Gurney = min(t/4, h/10),
-esteira 1 % C, global C/2. São pontos de partida, não substituem estudo de independência de malha.
+esteira 1 % C, global C/20. São pontos de partida, não substituem estudo de independência de malha.
 
 ## 9. Fluent: referência, relatórios e coeficientes
 
