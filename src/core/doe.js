@@ -34,6 +34,7 @@ export function doeVariables(pkg) {
       vars.push({ key: keys.gpos(n), label: `gurney_pos_${n}`, unit: 'mm', group: g, element: n, ref: Number(el.gurney.pos) || 0, note: 'distância ao BF' });
     }
   });
+  if (pkg.config.domain?.groundEnabled) vars.push({ key: keys.hground, label: 'h_ground', unit: 'mm', group: 'Solo', element: null, ref: pkg.config.domain.groundClearance, note: 'folga ao solo (DS_h_ground)' });
   vars.push({ key: 'Uinf', label: 'Uinf', unit: 'm/s', group: 'Escoamento', element: null, ref: pkg.config.fluent.Uinf });
   return vars;
 }

@@ -15,6 +15,7 @@ import outputs from './views/outputs.js';
 import graficos from './views/graficos.js';
 import comparacao from './views/comparacao.js';
 import exportacao from './views/exportacao.js';
+import scripts from './views/scripts.js';
 
 const SECTIONS = [
   { id: 'dashboard', label: 'Dashboard', view: dashboard, grp: 'Visão geral' },
@@ -29,6 +30,7 @@ const SECTIONS = [
   { id: 'graficos', label: 'Gráficos', view: graficos, grp: 'Análise', n: 8 },
   { id: 'comparacao', label: 'Comparação', view: comparacao, n: 9 },
   { id: 'exportacao', label: 'Exportação', view: exportacao, n: 10 },
+  { id: 'scripts', label: 'Scripts Workbench', view: scripts, grp: 'Automação', n: 11 },
 ];
 
 
@@ -46,6 +48,7 @@ const ICONS = {
   graficos: '<path d="M4 20V4M4 20h16"/><path d="M7 15l4-5 3 3 5-7"/>',
   comparacao: '<path d="M7 4v16M17 4v16"/><path d="M3 9h8M13 15h8"/>',
   exportacao: '<path d="M12 15V3M7 8l5-5 5 5"/><path d="M4 14v6h16v-6"/>',
+  scripts: '<rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M7 10l3 2.5L7 15M12 15h5"/>',
 };
 const icon = (id) => h('span', { class: 'ico', html: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[id] || ''}</svg>` });
 const root = document.getElementById('app');

@@ -63,6 +63,7 @@ export function dsName(key, ctx = 1) {
   const pkg = typeof ctx === 'object' ? ctx : null;
   const nGurney = pkg ? pkg.config.elements.filter(gurneyConfigured).length : ctx;
   let m;
+  if (key === 'h_ground') return 'DS_h_ground';
   if ((m = key.match(/^chord_(\d+)$/))) return `DS_chord${m[1]}`;
   if ((m = key.match(/^AoA_(\d+)$/))) return `DS_AoA${m[1]}`;
   if ((m = key.match(/^(Gap|Overlap)_(\d+)$/))) {

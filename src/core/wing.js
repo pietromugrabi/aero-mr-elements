@@ -25,6 +25,7 @@ export const keys = {
   off: (n) => `pivot_off_${n}`, dte: (n) => `pivot_dTE_${n}`,
   gon: (n) => `gurney_on_${n}`, gh: (n) => `gurney_h_${n}`, gt: (n) => `gurney_t_${n}`, gpos: (n) => `gurney_pos_${n}`,
   gapc: (n) => `Gap_${n}_c`, overlapc: (n) => `Overlap_${n}_c`,
+  hground: 'h_ground', // folga ao solo (domínio), não muda a montagem dos perfis
 };
 
 /** Gap/Overlap informados como fração de uma corda (Gap_n = Gap_n_c · chord_base) em vez de mm. */
@@ -114,6 +115,7 @@ export function referenceInputs(pkg) {
       inp[keys.gh(n)] = el.gurney.h; inp[keys.gt(n)] = el.gurney.t; inp[keys.gpos(n)] = Number(el.gurney.pos) || 0;
     }
   });
+  if (c.domain?.groundEnabled) inp[keys.hground] = c.domain.groundClearance;
   inp.Uinf = c.fluent.Uinf;
   return inp;
 }

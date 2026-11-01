@@ -10,7 +10,7 @@ import { doeVariables, dpViolations } from './doe.js';
 
 /** Variáveis que podem ser eixos do mapa (exclui liga/desliga do Gurney e Uinf, que não mudam a geometria). */
 export function conflictVariables(pkg) {
-  return doeVariables(pkg).filter((v) => v.key !== 'Uinf' && !/^gurney_on_/.test(v.key));
+  return doeVariables(pkg).filter((v) => v.key !== 'Uinf' && v.key !== 'h_ground' && !/^gurney_on_/.test(v.key));
 }
 
 /** Faixa padrão de um eixo a partir do valor de referência. */
