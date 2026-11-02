@@ -14,7 +14,10 @@ export const DEFAULT_WB = Object.freeze({
   turb: null,           // 'geko' | 'sst' | null (automático pelo texto "Modelo de turbulência")
   csep: null,           // GEKO Csep (null = valor do texto do modelo; senão 1,75 = padrão do Fluent)
   processors: 4, precision: 'Double',
-  iterations: 3000, residual: 1e-6,
+  iterations: 1500, residual: 1e-6,
+  // parada por estabilização de lift_force/drag_force (o resíduo 1e-6 não é atingido: o DP 0 do 1E
+  // rodou 3000 iterações com as forças estáveis desde ~120); stop = variação relativa máxima
+  conv: { enabled: true, stop: 1e-4, ignore: 100, use: 50 },
   turbIntensity: 1, viscRatio: 10, // inlet: intensidade [%] e razão de viscosidade turbulenta
   initHybrid: true, generateMesh: true, edgeHard: true, solve: false,
   wingSoi: { enabled: true, radius: 0.75, size: null }, // esfera de influência na asa: raio × C, tamanho (mm; null = C/200)
@@ -47,7 +50,7 @@ export function parseValues(text) {
 /** Opções do pacote mescladas com os padrões, já resolvidas (caminhos, turbulência, Csep). */
 export function wbSettings(pkg) {
   const c = pkg.config, w = c.workbench || {};
-  const s = { ...DEFAULT_WB, ...w, wingSoi: { ...DEFAULT_WB.wingSoi, ...(w.wingSoi || {}) }, dp: { ...DEFAULT_WB.dp, ...(w.dp || {}) } };
+  const s = { ...DEFAULT_WB, ...w, wingSoi: { ...DEFAULT_WB.wingSoi, ...(w.wingSoi || {}) }, dp: { ...DEFAULT_WB.dp, ...(w.dp || {}) }, conv: { ...DEFAULT_WB.conv, ...(w.conv || {}) } };
   const f = { ...DEFAULT_FLUENT, ...c.fluent };
   const visc = String(f.viscous || '');
   s.turbResolved = s.turb || (/geko/i.test(visc) ? 'geko' : 'sst');
@@ -372,7 +375,8 @@ REPORTS = [${rl.join(', ')}]
 TOTALS = ${pyList(totals, py)}
 COUPLED = ${coupled ? 'True' : 'False'}
 RESIDUAL = ${pnum(s.residual)}
-ITERS = ${Math.round(Number(s.iterations) || 3000)}
+ITERS = ${Math.round(Number(s.iterations) || 1500)}
+CONV = ${s.conv.enabled ? `(${pnum(s.conv.stop)}, ${Math.round(Number(s.conv.ignore) || 0)}, ${Math.max(1, Math.round(Number(s.conv.use) || 1))})` : 'None'}   # (stop, ignorar antes, usar iteracoes) em lift/drag totais
 INIT = ${s.initHybrid ? 'True' : 'False'}
 LOG = codecs.open(LOGP, "w", "utf-8")
 def log(t):
@@ -493,7 +497,14 @@ def m_res():
     for k in eq.get_object_names():
         eq[k].absolute_criteria = RESIDUAL
 step("residuos %s" % RESIDUAL, m_res)
-step("%d iteracoes" % ITERS, lambda: setattr(S.solution.run_calculation, "iter_count", ITERS))
+def m_conv():
+    cc = S.solution.monitor.convergence_conditions
+    for n in [x for x in TOTALS if x in names]:
+        cc.convergence_reports["conv_" + n] = {"report_defs": n, "stop_criterion": CONV[0], "initial_values_to_ignore": CONV[1], "previous_values_to_consider": CONV[2], "print": True, "active": True}
+    cc.condition = "all-conditions-are-met"
+    cc.frequency = 1
+if CONV: step("convergencia por lift/drag %s" % (CONV,), m_conv)
+step("%d iteracoes (maximo)" % ITERS, lambda: setattr(S.solution.run_calculation, "iter_count", ITERS))
 def m_init():
     S.solution.initialization.initialization_type = "hybrid"
     S.solution.initialization.hybrid_initialize()
