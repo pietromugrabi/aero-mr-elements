@@ -3,6 +3,7 @@ import * as store from '../store.js';
 import { wingOf, needs, pageHead } from '../common.js';
 import { MESH_METHODS, meshSuggestions, inflationThickness } from '../../core/mesh.js';
 import { DEFAULT_FLUENT } from '../../core/fluent.js';
+import { DEFAULT_DOMAIN } from '../../core/domain.js';
 
 export function suggestionsFor(pkg) {
   const w = wingOf(pkg);
@@ -10,7 +11,10 @@ export function suggestionsFor(pkg) {
   const f = { ...DEFAULT_FLUENT, ...pkg.config.fluent };
   const U = Number(f.Uinf);
   if (!(U > 0)) return { missing: 'Informe Uinf (Fluent Setup) para calcular a 1ª camada.' };
+  const d = { ...DEFAULT_DOMAIN, ...pkg.config.domain };
+  const Cd = d.chordBasis === 'principal' ? w.plane[0].chord : w.chordSum;
   return meshSuggestions({
+    ground: d.groundEnabled ? { clearance: Number(d.groundClearance), upstream: d.upstream * Cd, moving: !!d.groundMoving } : null,
     chords: w.plane.map((e) => e.chord), rho: f.rho, U, mu: f.mu, yplus: pkg.config.mesh.yplusTarget || 1,
     teRadius: w.procs.map((p, i) => (p.te?.ok ? p.te.r * w.plane[i].chord : null)),
     slotClearance: w.asm.slots.map((s) => s.clearance), gurney: w.asm.elements.map((e) => e.gurney), C: w.chordSum,
@@ -31,6 +35,8 @@ export default function malha(ctx) {
       const es = m.edgeSizing.find((x) => x.target === e.surface); if (es) { es.type = 'tamanho'; es.value = +e.edgeSize.toPrecision(3); es.fromSuggestion = true; }
       if (i === 0) { m.refinements.le.size = +e.leSize.toPrecision(3); m.refinements.te.size = +e.teSize.toPrecision(3); }
     });
+    const gi = S.ground && m.inflation.find((x) => x.surface === 'ground');
+    if (gi) { gi.firstLayer = +S.ground.y1.toPrecision(3); gi.layers = S.ground.layers; gi.growth = S.ground.growth; gi.fromSuggestion = true; } // liga/desliga fica com o usuário
     if (S.slotSize.some(Number.isFinite)) m.refinements.gap.size = +Math.min(...S.slotSize.filter(Number.isFinite)).toPrecision(3);
     m.refinements.flap.size = +S.flapSize.toPrecision(3);
     if (S.gurneySize.some(Number.isFinite)) m.refinements.gurney.size = +Math.min(...S.gurneySize.filter(Number.isFinite)).toPrecision(3);
@@ -58,7 +64,7 @@ export default function malha(ctx) {
     card('Inflation por superfície', h('div', { class: 'table-wrap' }, h('table', null,
       h('thead', null, h('tr', null, ['Superfície', 'Ativo', 'Camadas', 'Crescimento', '1ª camada', 'Espessura total', 'Sugestão (y+)'].map((t) => h('th', null, t)))),
       h('tbody', null, m.inflation.map((inf) => {
-        const e = S && !S.missing ? S.perElement.find((x) => x.surface === inf.surface) : null;
+        const e = S && !S.missing ? (inf.surface === 'ground' ? S.ground : S.perElement.find((x) => x.surface === inf.surface)) : null;
         const tot = inf.firstLayer && inf.layers ? inflationThickness(inf.firstLayer, inf.growth || 1.2, inf.layers) : null;
         return h('tr', null, h('td', null, h('code', null, inf.surface)),
           h('td', null, checkField({ checked: inf.enabled, onChange: (v) => set(() => { inf.enabled = v; }, `inflation ${inf.surface}`, v) })),
@@ -66,7 +72,9 @@ export default function malha(ctx) {
           h('td', null, numField({ unit: '—', value: inf.growth, key: `ig_${inf.surface}`, onChange: (v) => set(() => { inf.growth = v; }, `crescimento ${inf.surface}`, v) })),
           h('td', null, numField({ unit: 'mm', value: inf.firstLayer, key: `if_${inf.surface}`, onChange: (v) => set(() => { inf.firstLayer = v; }, `1ª camada ${inf.surface}`, v) })),
           h('td', { class: 'num' }, tot ? `${fv(tot, 3)} mm` : '—'),
-          h('td', null, e ? h('small', null, `y₁ = ${e.y1.toExponential(2)} mm, ${e.layers} cam. (Re = ${e.Re.toExponential(2)}, δ ≈ ${fv(e.delta, 3)} mm)`) : ''));
+          h('td', null, !e ? '' : inf.surface === 'ground'
+            ? h('small', { title: e.moving ? 'Solo móvel (velocidade = Uinf): quase não há camada-limite; as camadas resolvem o cisalhamento induzido pela asa. 1ª camada igual à do elemento principal.' : 'Solo fixo: placa plana com o comprimento da entrada até o BF da asa.' }, `y₁ = ${e.y1.toExponential(2)} mm, ${e.layers} cam., total ${fv(e.total, 3)} mm${Number.isFinite(e.cap) ? ` (≤ ¼ da folga = ${fv(e.cap, 3)} mm)` : ''}${e.moving ? ' — solo móvel' : ''}`)
+            : h('small', null, `y₁ = ${e.y1.toExponential(2)} mm, ${e.layers} cam. (Re = ${e.Re.toExponential(2)}, δ ≈ ${fv(e.delta, 3)} mm)`)));
       }))))),
     card('Edge sizing dos elementos', h('div', { class: 'table-wrap' }, h('table', null,
       h('thead', null, h('tr', null, ['Alvo', 'Tipo', 'Valor', 'Bias', 'Sugestão'].map((t) => h('th', null, t)))),
