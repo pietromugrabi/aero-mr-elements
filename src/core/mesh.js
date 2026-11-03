@@ -54,7 +54,8 @@ export function inflationThickness(y1, g, N) { return g === 1 ? y1 * N : (y1 * (
 
 /**
  * Sugestões heurísticas (mm). Não substituem estudo de independência de malha.
- * @param ctx { chords:[mm], teRadius:[mm|null], slotClearance:[mm], gurney:[{h,t}|null], rho, U, mu, yplus, C }
+ * @param ctx { chords:[mm], teRadius:[mm|null], slotClearance:[mm], gurney:[{h,t}|null], rho, U, mu, yplus, C,
+ *              ground:{ clearance mm, upstream mm, moving }|null }
  */
 export function meshSuggestions(ctx) {
   const { chords, rho, U, mu, yplus = 1 } = ctx;
@@ -73,9 +74,25 @@ export function meshSuggestions(ctx) {
     };
   });
   const slots = (ctx.slotClearance || []).map((d) => (d > 0 ? d / 15 : null));
+  // Solo: placa plana com o comprimento percorrido da entrada até o BF da asa (montante + C).
+  // Solo móvel (velocidade = Uinf) quase não forma CL; as camadas resolvem só o cisalhamento
+  // induzido pela asa, então a 1ª camada é a mesma do elemento principal (y+ conservador).
+  // Em ambos os casos a espessura total fica ≤ 1/4 da folga ao solo, para não encostar na malha da asa.
+  let ground = null;
+  if (ctx.ground) {
+    const g = ctx.ground, growth = 1.2;
+    const fl = firstLayerHeight({ rho, U, mu, L: ((g.upstream || 0) + C) / 1000, yplus });
+    const y1 = g.moving ? perElement[0].y1 : fl.y * 1000;
+    const cap = g.clearance > 0 ? g.clearance / 4 : Infinity;
+    const target = Math.min(g.moving ? perElement[0].delta : fl.delta * 1000, cap);
+    const layers = Math.min(30, Math.max(5, layersToCover(y1, growth, target)));
+    let n = layers;
+    while (n > 1 && inflationThickness(y1, growth, n) > cap) n--;
+    ground = { surface: 'ground', y1, layers: n, growth, total: inflationThickness(y1, growth, n), Re: fl.Re, delta: fl.delta * 1000, cap, moving: !!g.moving };
+  }
   const gur = (ctx.gurney || []).map((g) => (g ? Math.min(g.t / 4, g.h / 10) : null));
   return {
-    perElement, slotSize: slots, gurneySize: gur,
+    perElement, ground, slotSize: slots, gurneySize: gur,
     globalMax: C / 20, wakeSize: C * 0.01, wakeLength: 2, groundSize: C * 0.02, flapSize: Math.min(...chords) * 0.004,
     note: 'Sugestões heurísticas (placa plana para y+, frações da corda para tamanhos). Confirme com estudo de independência de malha e verifique y+ no Fluent após a solução.',
   };
