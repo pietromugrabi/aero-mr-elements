@@ -8,13 +8,13 @@
 
 import { computeDP, flatMetrics } from './outputs.js';
 import { generateDesigns, parseLevels } from './doe.js';
-import { referenceInputs } from './wing.js';
+import { referenceInputs, keys, topologyOf } from './wing.js';
 
 /** Critérios (sempre em módulo: downforce sai com sinal negativo no Fluent). */
 export const CRITERIA = [['L', 'maior |lift| (Lift_force)'], ['Cl', 'maior |Cl| (Cl_total)'], ['ClCd', 'maior |Cl|/Cd']];
 /** Quais vizinhos do máximo seguem para a próxima etapa. */
-export const NEIGHBOR_MODES = [['todos', 'máximo + todos os vizinhos'], ['faixa', 'máximo + vizinhos a até a faixa % do máximo']];
-export const DEFAULT_ALT = Object.freeze({ metric: 'Cl', neighbors: 'todos', band: 2 });
+export const NEIGHBOR_MODES = [['todos', 'máximo + todos os vizinhos'], ['faixa', 'máximo + vizinhos a até a faixa % do máximo'], ['top', 'só as N melhores da zona (máximo + vizinhos)']];
+export const DEFAULT_ALT = Object.freeze({ metric: 'Cl', neighbors: 'todos', band: 2, top: 5 });
 /** Variáveis por etapa: 1, 2 (como a planilha) ou 3. */
 export const MAX_STAGE_VARS = 3;
 
@@ -35,6 +35,38 @@ export const stageDps = (run, k) => run.dps.filter((d) => d.stage === k);
 
 /** Variáveis das etapas 0..k (sem repetição, na ordem em que entraram). */
 export function keysUpTo(run, k) { return uniq(stagesOf(run).slice(0, k + 1).flatMap((s) => s.keys || [])); }
+
+/**
+ * Deflexão constante na etapa: para cada flap n cujo elemento de referência m tem o AoA variando na
+ * etapa (e o AoA_n não), oferece AoA_n = AoA_m + δ. Ligada por padrão quando a etapa também varia
+ * o gap ou o overlap da fenda m–n. δ = null usa a deflexão herdada (AoA_n − AoA_m da linha base).
+ * @returns [{from, to, m, n, slot, on, value}]
+ */
+export function deflectionPairs(pkg, st) {
+  const tp = topologyOf(pkg), ks = (st?.keys || []).filter(Boolean), out = [];
+  pkg.config.elements.forEach((_, i) => {
+    if (tp.kinds[i] !== 'flap') return;
+    const n = i + 1, m = tp.refs[i] + 1, from = keys.aoa(m), to = keys.aoa(n);
+    if (!ks.includes(from) || ks.includes(to)) return;
+    const slot = [keys.gap(n), keys.overlap(n), keys.gapc(n), keys.overlapc(n)].some((key) => ks.includes(key));
+    const d = st.deflection?.[to];
+    out.push({ from, to, m, n, slot, on: d?.on ?? slot, value: Number.isFinite(d?.value) ? d.value : null });
+  });
+  return out;
+}
+
+/** Variáveis das etapas 0..k mais os AoA presos por deflexão constante (seguem junto para a próxima etapa). */
+export function keysWithDeflection(pkg, run, k) {
+  const held = stagesOf(run).slice(0, k + 1).flatMap((s) => deflectionPairs(pkg, s).filter((p) => p.on).map((p) => p.to));
+  return uniq([...keysUpTo(run, k), ...held]);
+}
+
+/** Linha = base + níveis da etapa, com os AoA presos pela deflexão. */
+function withDeflection(row0, g, pairs) {
+  const r = { ...row0, ...g };
+  pairs.filter((p) => p.on).forEach((p) => { r[p.to] = +(Number(r[p.from]) + (p.value ?? Number(row0[p.to]) - Number(row0[p.from]))).toPrecision(10); });
+  return r;
+}
 
 /** Valor de uma métrica num DP (null sem resultado ou com status "falhou"). */
 export function metricOf(pkg, dp, metric) {
@@ -58,7 +90,7 @@ export function levelsUsed(dps, ks) {
 /**
  * Melhores combinações da etapa k, que seguem para a etapa k+1: o máximo e seus vizinhos
  * (todas as variáveis das etapas 0..k a no máximo 1 nível do máximo; no modo 'faixa', só os
- * vizinhos com |critério| ≥ (1 − faixa%) · máximo).
+ * vizinhos com |critério| ≥ (1 − faixa%) · máximo; no modo 'top', só os N melhores dessa zona).
  * @returns {null | {best, selected, combos:[{combo, dp, v}], keys, ranked, nResults, nTotal}}
  */
 export function carried(pkg, run, k, cfg = altConfig(run)) {
@@ -68,10 +100,11 @@ export function carried(pkg, run, k, cfg = altConfig(run)) {
   const ix = (dp) => ks.map((key) => lv[key].indexOf(r6(dp.inputs[key])));
   const best = ranked[0], bi = ix(best.dp);
   const lim = cfg.neighbors === 'faixa' ? best.s * (1 - (Number(cfg.band) || 0) / 100) : -Infinity;
-  const selected = ranked.filter((c) => c === best || (c.s >= lim && ix(c.dp).every((x, j) => Math.abs(x - bi[j]) <= 1)));
-  const seen = new Set(), combos = [];
+  const zone = ranked.filter((c) => c === best || (c.s >= lim && ix(c.dp).every((x, j) => Math.abs(x - bi[j]) <= 1)));
+  const selected = cfg.neighbors === 'top' ? zone.slice(0, Math.max(1, Math.round(Number(cfg.top)) || 1)) : zone;
+  const seen = new Set(), combos = [], carriedKeys = keysWithDeflection(pkg, run, k);
   selected.forEach((c) => {
-    const combo = Object.fromEntries(ks.map((key) => [key, Number(c.dp.inputs[key])]));
+    const combo = Object.fromEntries(carriedKeys.map((key) => [key, Number(c.dp.inputs[key])]));
     const id = ks.map((key) => r6(combo[key])).join('|');
     if (!seen.has(id)) { seen.add(id); combos.push({ combo, dp: c.dp, v: c.v }); }
   });
@@ -101,11 +134,11 @@ export function stageErrors(run, k, varKeys) {
 export function stageRows(pkg, run, k, base, cfg = altConfig(run)) {
   const st = stagesOf(run)[k];
   const lv = Object.fromEntries((st.keys || []).filter(Boolean).map((key) => [key, st.levels?.[key] || '']));
-  const grid = generateDesigns('fatorial', lv, {});
-  if (k === 0) return { rows: grid.map((g) => ({ ...base, ...g })), prev: null };
+  const grid = generateDesigns('fatorial', lv, {}), pairs = deflectionPairs(pkg, st);
+  if (k === 0) return { rows: grid.map((g) => withDeflection(base, g, pairs)), prev: null };
   const prev = carried(pkg, run, k - 1, cfg);
   if (!prev) return { rows: [], prev: null, error: `A etapa ${k} ainda não tem resultados: rode os DPs no Fluent e importe (aba Outputs).` };
-  return { rows: prev.combos.flatMap((c) => grid.map((g) => ({ ...base, ...c.combo, ...g }))), prev };
+  return { rows: prev.combos.flatMap((c) => grid.map((g) => withDeflection({ ...base, ...c.combo }, g, pairs))), prev };
 }
 
 /** Nº de DPs previsto da etapa k (null se depende de resultados que ainda não existem). */
