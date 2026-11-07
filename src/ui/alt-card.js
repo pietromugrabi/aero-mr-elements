@@ -1,5 +1,5 @@
 // Planejamento do método "Otimização alternada" (aba Inputs / Design Points): etapas dentro da
-// rodada, cada uma com 1–3 variáveis e seus níveis; a etapa 1 é um fatorial (tabela como a planilha)
+// rodada, cada uma com 1 ou mais variáveis e seus níveis; a etapa 1 é um fatorial (tabela como a planilha)
 // e cada etapa seguinte cruza as variáveis novas com o máximo e os vizinhos da etapa anterior.
 
 import { h, msgs, badge, selectField, numField, checkField, seg, confirmBox, toast, fv } from './dom.js';
@@ -7,7 +7,7 @@ import * as store from './store.js';
 import { doeVariables, parseLevels, filterValidRows, makeDesignPoints, LIMITS } from '../core/doe.js';
 import { uid } from '../core/model.js';
 import { metricList } from '../core/outputs.js';
-import { altConfig, CRITERIA, NEIGHBOR_MODES, MAX_STAGE_VARS,stagesOf, stageDps, stageErrors, stageRows, stageCount, stageTable, carried, overallBest, stageEdges, keysUpTo, keysWithDeflection, deflectionPairs } from '../core/alternada.js';
+import { altConfig, CRITERIA, NEIGHBOR_MODES, stagesOf, stageDps, stageErrors, stageRows, stageCount, stageTable, carried, overallBest, stageEdges, keysUpTo, keysWithDeflection, deflectionPairs } from '../core/alternada.js';
 
 const SHOW = [['L', '|lift|'], ['Cl', 'Cl'], ['Cd', 'Cd'], ['ClCd', 'Cl/Cd']];
 
@@ -67,8 +67,8 @@ export function altPlan(ctx, pkg, run, { base, pivotScaling }) {
     const status = dps.length ? badge(`${dps.length} DP(s), ${nRes} com resultado`, nRes === dps.length ? 'ok' : 'warn') : k > 0 && !prev ? badge('aguardando resultados da etapa anterior', 'warn') : badge('não gerada', '');
     const usedBefore = keysUpTo(run, k - 1);
     const opts = vars.map((v) => [v.key, `${v.label} — ${v.group}${usedBefore.includes(v.key) ? ' (já variada antes)' : ''}`]);
-    // nº de parâmetros da etapa: 1, 2 (padrão da etapa 1, como a planilha) ou 3
-    const nv = Math.min(MAX_STAGE_VARS, Math.max(1, st.nVars || (k === 0 ? 2 : 1), ks.filter(Boolean).length));
+    // nº de parâmetros da etapa: de 1 até todas as variáveis do pacote (padrão da etapa 1: 2, como a planilha)
+    const nv = Math.min(vars.length, Math.max(1, st.nVars || (k === 0 ? 2 : 1), ks.filter(Boolean).length));
     const setNv = (m) => upd(() => { st.nVars = m; st.keys = (st.keys || []).slice(0, m); }, `etapa ${k + 1}: ${m} parâmetro(s)`, m);
     const setKey = (i, v) => upd(() => { const a = Array.from({ length: nv }, (_, j) => (st.keys || [])[j] || ''); a[i] = v || ''; st.keys = a.filter(Boolean); st.nVars = nv; st.levels = st.levels || {}; }, `etapa ${k + 1}: variável ${i + 1}`, v);
     // a tabela tem o último parâmetro nas colunas e os demais (e as combinações da etapa anterior) nas linhas
@@ -104,12 +104,14 @@ export function altPlan(ctx, pkg, run, { base, pivotScaling }) {
       if (dps.some((d) => d.outputs?.isExample)) notes.push({ level: 'aviso', msg: 'Há DADOS DE EXEMPLO (sintéticos) nesta etapa.' });
     }
     const canGen = !errs.length && (k === 0 || prev);
+    const nvSeg = seg(Array.from({ length: vars.length }, (_, i) => [String(i + 1), String(i + 1)]), String(nv), (v) => setNv(Number(v)));
+    nvSeg.style.flexWrap = 'wrap'; // pacotes grandes têm muitas variáveis
     return h('div', { class: 'card', style: { marginTop: '10px' } },
       h('div', { class: 'row', style: { alignItems: 'center' } }, h('h3', { style: { margin: 0 } }, `Etapa ${k + 1}`), status, h('span', { class: 'spacer' }),
         k === stages.length - 1 && k > 0 ? h('button', { class: 'small danger', onclick: async () => { if (dps.length && !(await confirmBox('Remover etapa', `Remover a etapa ${k + 1} e seus ${dps.length} DP(s)?`, 'Remover', true))) return; upd(() => { doe.stages = doe.stages.slice(0, k); run.dps = run.dps.filter((d) => d.stage !== k); }, `etapa ${k + 1} removida`); } }, 'Remover etapa') : null),
       h('div', { class: 'row', style: { margin: '6px 0' } }, h('span', { class: 'lbl' }, k === 0 ? 'Parâmetros analisados juntos:' : 'Parâmetros novos nesta etapa:'),
-        seg(Array.from({ length: MAX_STAGE_VARS }, (_, i) => [String(i + 1), String(i + 1)]), String(nv), (v) => setNv(Number(v))),
-        h('small', { class: 'muted' }, nv === 3 ? `3 parâmetros: ${k === 0 ? 'cada um com 5 níveis dá 125 DPs; ' : ''}máximo + vizinhos podem ser até 27 combinações por etapa` : '')),
+        nvSeg,
+        h('small', { class: 'muted' }, nv >= 3 ? `${nv} parâmetros: ${k === 0 ? `cada um com 5 níveis dá ${5 ** nv} DPs; ` : ''}máximo + vizinhos podem ser até ${3 ** nv} combinações por etapa` : '')),
       h('div', { class: 'fields' }, Array.from({ length: nv }, (_, i) => selectField({ label: varLabel(i), value: ks[i] || '', options: [['', '— escolha —'], ...opts], onChange: (v) => setKey(i, v) }))),
       levelInputs.length ? h('div', { class: 'table-wrap' }, h('table', null, h('thead', null, h('tr', null, ['Variável', 'Referência', 'Níveis', ''].map((t) => h('th', null, t)))), h('tbody', null, levelInputs))) : null,
       deflEls,
@@ -125,7 +127,7 @@ export function altPlan(ctx, pkg, run, { base, pivotScaling }) {
   const best = overallBest(pkg, run, cfg);
   const last = stages.length - 1;
   return h('div', null,
-    h('p', { class: 'muted' }, 'Como a planilha: a etapa 1 é um fatorial de 2 ou 3 parâmetros (também dá para analisar 1) e vira uma tabela. Cada etapa seguinte acrescenta mais 1 a 3 parâmetros, cruzados só com as melhores combinações da etapa anterior: o máximo do critério e seus vizinhos (um nível acima ou abaixo em cada variável). Com 3 parâmetros por etapa, use "só as N melhores da zona" para o número de DPs não explodir. Ao variar o AoA do elemento antes de uma fenda junto com o gap ou o overlap dela, o elemento seguinte acompanha com deflexão constante (AoA_n = AoA_anterior + δ). As variáveis fora das etapas ficam no valor de referência.'),
+    h('p', { class: 'muted' }, 'Como a planilha: a etapa 1 é um fatorial de quantos parâmetros você quiser e vira uma tabela. Cada etapa seguinte acrescenta mais parâmetros, cruzados só com as melhores combinações da etapa anterior: o máximo do critério e seus vizinhos (um nível acima ou abaixo em cada variável). Com 3 ou mais parâmetros por etapa, use "só as N melhores da zona" para o número de DPs não explodir. Ao variar o AoA do elemento antes de uma fenda junto com o gap ou o overlap dela, o elemento seguinte acompanha com deflexão constante (AoA_n = AoA_anterior + δ). As variáveis fora das etapas ficam no valor de referência.'),
     h('div', { class: 'fields' },
       selectField({ label: 'Melhor resultado', value: cfg.metric, options: CRITERIA, onChange: (v) => setOpt('metric', v), hint: 'em módulo: downforce sai negativa no Fluent' }),
       selectField({ label: 'Seguem para a próxima etapa', value: cfg.neighbors, options: NEIGHBOR_MODES, onChange: (v) => setOpt('neighbors', v) }),
