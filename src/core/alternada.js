@@ -1,6 +1,6 @@
 // Método de DOE "Otimização alternada" (como a planilha "Otimização Alternada"), por etapas dentro
 // da mesma rodada:
-//   etapa 1: fatorial de 1–3 variáveis (ex.: AoA_1 × AoA_2, 5 níveis cada) → tabela como a planilha;
+//   etapa 1: fatorial de 1 ou mais variáveis (ex.: AoA_1 × AoA_2, 5 níveis cada) → tabela como a planilha;
 //   etapa k: entra outra variável (ex.: AoA_3, 5 níveis), cruzada só com as melhores combinações da
 //            etapa anterior: o máximo do critério (|lift|, |Cl| ou |Cl|/Cd) e seus vizinhos
 //            (cada variável a no máximo 1 nível de distância do máximo).
@@ -15,8 +15,6 @@ export const CRITERIA = [['L', 'maior |lift| (Lift_force)'], ['Cl', 'maior |Cl| 
 /** Quais vizinhos do máximo seguem para a próxima etapa. */
 export const NEIGHBOR_MODES = [['todos', 'máximo + todos os vizinhos'], ['faixa', 'máximo + vizinhos a até a faixa % do máximo'], ['top', 'só as N melhores da zona (máximo + vizinhos)']];
 export const DEFAULT_ALT = Object.freeze({ metric: 'Cl', neighbors: 'todos', band: 2, top: 5 });
-/** Variáveis por etapa: 1, 2 (como a planilha) ou 3. */
-export const MAX_STAGE_VARS = 3;
 
 export function altConfig(run) {
   const c = { ...DEFAULT_ALT, ...(run?.doe?.altOpt || {}) };
@@ -116,7 +114,6 @@ export function stageErrors(run, k, varKeys) {
   const st = stagesOf(run)[k], out = [];
   const ks = (st?.keys || []).filter(Boolean);
   if (!ks.length) out.push('escolha a variável');
-  if (ks.length > MAX_STAGE_VARS) out.push(`no máximo ${MAX_STAGE_VARS} variáveis por etapa`);
   if (uniq(ks).length < ks.length) out.push('variáveis repetidas');
   ks.forEach((key) => {
     if (varKeys && !varKeys.includes(key)) out.push(`${key} não existe neste pacote`);
