@@ -1,15 +1,15 @@
 import { h, card, msgs, badge, checkField, selectField, promptBox, download, safeName, fv, exampleBanner, table } from '../dom.js';
 import * as store from '../store.js';
 import { needs, pageHead } from '../common.js';
-import { xyChart, barChart, heatmapChart } from '../echarts-plots.js';
-import { collectRecords, filterRecords, buildSeries, heatmapGrid, fitResponseSurface, ranking, valueOf, refWarnings, varyingInputs } from '../../core/chartdata.js';
+import { xyChart, barChart, heatmapChart, paretoChart } from '../echarts-plots.js';
+import { collectRecords, filterRecords, buildSeries, heatmapGrid, fitResponseSurface, ranking, sensitivity, valueOf, refWarnings, varyingInputs } from '../../core/chartdata.js';
 import { metricList } from '../../core/outputs.js';
 import { toCSV } from '../../core/csv.js';
 import { parseNum } from '../../core/num.js';
 import { uid, clone } from '../../core/model.js';
 import { doeVariables, derivedColumns } from '../../core/doe.js';
 
-const TYPES = [['xy', 'Curvas XY'], ['scatter', 'Dispersão'], ['heatmap', 'Mapa de calor'], ['surface', 'Superfície de resposta'], ['ranking', 'Ranking'], ['matrix', 'Matriz de comparação']];
+const TYPES = [['xy', 'Curvas XY'], ['scatter', 'Dispersão'], ['heatmap', 'Mapa de calor'], ['surface', 'Superfície de resposta'], ['ranking', 'Ranking'], ['matrix', 'Matriz de comparação'], ['pareto', 'Pareto de sensibilidade']];
 
 function defaults() { return { type: 'xy', x: null, ys: ['Cl'], groupBy: '', perElement: false, includeTotal: true, z: 'Cl', y2: null, metric: 'Cl', desc: true, filters: { packages: [], runs: [], ranges: {} } }; }
 
@@ -81,19 +81,20 @@ export default function graficos(ctx) {
     return h('div', { class: 'row', style: { flexWrap: 'nowrap' } }, h('code', { style: { width: '92px' } }, nameOf(k)), mk(0, 'mín'), mk(1, 'máx'));
   };
   const filterVars = vars.filter((v) => /^(AoA|Gap|Overlap)_|^Uinf$|^chord_/.test(v));
-  const yList = cfg.type === 'heatmap' || cfg.type === 'surface' ? null : cfg.type === 'ranking' || cfg.type === 'matrix' ? null : h('div', { class: 'field' }, h('label', null, 'Y (um gráfico por métrica — nunca dois eixos)'),
+  const yList = cfg.type === 'heatmap' || cfg.type === 'surface' ? null : ['ranking', 'matrix', 'pareto'].includes(cfg.type) ? null : h('div', { class: 'field' }, h('label', null, 'Y (um gráfico por métrica — nunca dois eixos)'),
     h('div', { class: 'row' }, yOpts.map(([k, l]) => checkField({ label: l.replace(/ \[.*\]/, ''), checked: cfg.ys.includes(k), onChange: (v) => { cfg.ys = v ? [...cfg.ys, k] : cfg.ys.filter((x) => x !== k); rr(); } }))));
   const panel = card('Configuração',
     h('div', { class: 'row', style: { marginBottom: '10px' } }, h('span', { class: 'lbl' }, 'Atalhos:'),
       ['Lift/Drag × AoA', 'Lift/Drag × Uinf', 'Cl/Cd × AoA', 'Curvas por elemento', 'Estudo de gap', 'Estudo de overlap', 'Estudo de corda', 'Gurney × sem Gurney', 'Polar (Cl × Cd)'].map((n) => h('button', { class: 'small', onclick: () => { preset(cfg, n, vars, recs); rr(); } }, n)),
       h('button', { class: 'small', onclick: () => { Object.assign(cfg, { type: 'heatmap', x: vars.find((v) => /^AoA_2/.test(v)) || vars[0], y2: vars.find((v) => /^AoA_3/.test(v)) || vars[1], z: 'Cl' }); rr(); } }, 'Mapa AoA × AoA'),
-      h('button', { class: 'small', onclick: () => { Object.assign(cfg, { type: 'ranking', metric: 'ClCd', desc: true }); rr(); } }, 'Ranking Cl/Cd')),
+      h('button', { class: 'small', onclick: () => { Object.assign(cfg, { type: 'ranking', metric: 'ClCd', desc: true }); rr(); } }, 'Ranking Cl/Cd'),
+      h('button', { class: 'small', onclick: () => { Object.assign(cfg, { type: 'pareto', metric: 'L' }); rr(); } }, 'Pareto de sensibilidade')),
     h('div', { class: 'fields' },
       selectField({ label: 'Tipo', value: cfg.type, options: TYPES, onChange: (v) => { cfg.type = v; rr(); } }),
       ['xy', 'scatter', 'heatmap', 'surface'].includes(cfg.type) ? selectField({ label: 'Eixo X', value: cfg.x, options: xOpts, onChange: (v) => { cfg.x = v; rr(); } }) : null,
       ['heatmap', 'surface'].includes(cfg.type) ? selectField({ label: 'Eixo Y', value: cfg.y2 || vars[1], options: opts(vars), onChange: (v) => { cfg.y2 = v; rr(); } }) : null,
       ['heatmap', 'surface'].includes(cfg.type) ? selectField({ label: 'Cor (métrica)', value: cfg.z, options: mets.map((m) => [m.key, m.label]), onChange: (v) => { cfg.z = v; rr(); } }) : null,
-      ['ranking', 'matrix'].includes(cfg.type) ? selectField({ label: 'Métrica', value: cfg.metric, options: mets.map((m) => [m.key, m.label]), onChange: (v) => { cfg.metric = v; rr(); } }) : null,
+      ['ranking', 'matrix', 'pareto'].includes(cfg.type) ? selectField({ label: 'Métrica', value: cfg.metric, options: mets.map((m) => [m.key, m.label]), onChange: (v) => { cfg.metric = v; rr(); } }) : null,
       cfg.type === 'ranking' ? selectField({ label: 'Ordem', value: cfg.desc ? 'desc' : 'asc', options: [['desc', 'maior primeiro'], ['asc', 'menor primeiro']], onChange: (v) => { cfg.desc = v === 'desc'; rr(); } }) : null,
       ['xy', 'scatter'].includes(cfg.type) ? selectField({ label: 'Agrupar séries por', value: cfg.groupBy, options: grpOpts, onChange: (v) => { cfg.groupBy = v; rr(); } }) : null,
       cfg.type === 'matrix' ? selectField({ label: 'Linhas', value: cfg.groupBy || 'rodada', options: [['rodada', 'rodadas'], ['pacote', 'pacotes']], onChange: (v) => { cfg.groupBy = v; rr(); } }) : null),
@@ -169,8 +170,20 @@ export default function graficos(ctx) {
     out.push(card('Matriz de comparação (melhor valor por grupo; destaque = melhor da coluna)', h('div', { class: 'table-wrap' }, h('table', null,
       h('thead', null, h('tr', null, h('th', null, by === 'runName' ? 'Pacote / rodada' : 'Pacote'), h('th', { class: 'num' }, 'DPs'), cols.map(([k, m]) => h('th', { class: 'num' }, `${mets.find((x) => x.key === k).label} (${m})`)))),
       h('tbody', null, cellVals.map((r) => h('tr', null, h('td', null, r.g), h('td', { class: 'num' }, r.n), r.vals.map((v, j) => h('td', { class: 'num', style: v === best[j] ? { fontWeight: 700, background: 'var(--ok-soft)' } : null }, fv(v, 4))))))))));
+  } else if (cfg.type === 'pareto') {
+    const sv = sensitivity(recs, cfg.metric);
+    const metLabel = mets.find((m) => m.key === cfg.metric)?.label || cfg.metric;
+    if (new Set(recs.map((r) => r.runId)).size > 1) warn.push('Os DPs vêm de mais de uma rodada: filtre uma rodada para comparar condições iguais.');
+    if (sv.some((s) => s.mode === 'médias')) warn.push('Alguns parâmetros não têm DPs comparáveis (iguais em todo o resto): para eles o efeito usa a média por nível e mistura o efeito dos outros parâmetros.');
+    warn.push(...refWarnings(recs));
+    sv.forEach((s) => csvRows.push([nameOf(s.key), s.effect, s.pct, s.cum, s.n, s.mode]));
+    if (!sv.length) out.push(h('div', { class: 'empty' }, 'Nenhum parâmetro varia nos DPs filtrados.'));
+    else out.push(card(`Pareto de sensibilidade — |${metLabel}|`,
+      h('p', { class: 'muted' }, 'Efeito = quanto a métrica muda ao variar só aquele parâmetro. A faixa testada influencia o resultado: um parâmetro testado numa faixa maior tende a parecer mais sensível.'),
+      paretoChart(sv.map((s) => ({ label: nameOf(s.key), pct: s.pct, cum: s.cum, effect: s.effect })), { metric: metLabel, name: `pareto_${cfg.metric}` }),
+      table([{ label: '#', get: (_, i) => i + 1 }, { label: 'Parâmetro', get: (s) => nameOf(s.key) }, { label: 'Efeito', num: true, get: (s) => fv(s.effect, 4) }, { label: '% do total', num: true, get: (s) => fv(s.pct, 3) }, { label: '% acumulado', num: true, get: (s) => fv(s.cum, 3) }, { label: 'Comparações', num: true, get: (s) => s.n }], sv)));
   }
-  const csvHeaders = { xy: ['série', 'x', 'valor x', 'y', 'valor y', 'DP', 'pacote', 'rodada', 'exemplo'], scatter: ['série', 'x', 'valor x', 'y', 'valor y', 'DP', 'pacote', 'rodada', 'exemplo'], heatmap: ['x', 'valor x', 'y', 'valor y', 'métrica', 'valor', 'nº DPs', 'DPs'], surface: ['x', 'valor x', 'y', 'valor y', 'métrica', 'CFD', 'ajuste', 'DP'], ranking: ['DP', 'pacote', 'rodada', 'métrica', 'valor'], matrix: ['grupo', 'DPs', 'Cl máx', 'Cl/Cd máx', 'Cd mín', 'L máx', 'D mín'] }[cfg.type];
+  const csvHeaders = { pareto: ['parâmetro', 'efeito', '% do total', '% acumulado', 'comparações', 'método'], xy: ['série', 'x', 'valor x', 'y', 'valor y', 'DP', 'pacote', 'rodada', 'exemplo'], scatter: ['série', 'x', 'valor x', 'y', 'valor y', 'DP', 'pacote', 'rodada', 'exemplo'], heatmap: ['x', 'valor x', 'y', 'valor y', 'métrica', 'valor', 'nº DPs', 'DPs'], surface: ['x', 'valor x', 'y', 'valor y', 'métrica', 'CFD', 'ajuste', 'DP'], ranking: ['DP', 'pacote', 'rodada', 'métrica', 'valor'], matrix: ['grupo', 'DPs', 'Cl máx', 'Cl/Cd máx', 'Cd mín', 'L máx', 'D mín'] }[cfg.type];
   return h('div', null,
     pageHead('Gráficos', 'Escolha X/Y, filtros e agrupamentos. Cada métrica tem seu próprio gráfico (sem eixo duplo). Passe o mouse para ver o DP; roda do mouse dá zoom, e os ícones no canto salvam PNG ou restauram a vista.',
       h('button', { disabled: !csvRows.length || null, onclick: () => download(`${safeName(`grafico_${cfg.type}`)}.csv`, toCSV(csvHeaders, csvRows), 'text/csv') }, 'Exportar dados (CSV)')),
