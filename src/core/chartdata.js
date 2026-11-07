@@ -72,6 +72,34 @@ export function varyingInputs(recs, ignore = []) {
 }
 
 /**
+ * Sensibilidade (dados do gráfico de Pareto): efeito de cada entrada que varia sobre |métrica|.
+ * O efeito compara só DPs iguais em todas as outras entradas (amplitude dentro de cada grupo, com
+ * média entre os grupos); assim vale para variar um parâmetro por vez e para fatoriais. Se não
+ * houver DPs comparáveis, usa a diferença entre as médias por nível (mode 'médias').
+ * @returns [{key, effect, pct, cum, n, mode}] do maior para o menor efeito
+ */
+export function sensitivity(recs, metric, { ignore = ['Uinf'] } = {}) {
+  const keys = varyingInputs(recs, ignore);
+  const pts = recs.map((r) => ({ r, y: Math.abs(valueOf(r, metric)) })).filter((p) => Number.isFinite(p.y));
+  const mean = (a) => a.reduce((s, v) => s + v, 0) / a.length;
+  const level = (r, k) => fmtV(Number(r.inputs[k]));
+  const rows = keys.map((key) => {
+    const others = keys.filter((k) => k !== key);
+    const groups = new Map();
+    pts.forEach((p) => { const sig = others.map((k) => level(p.r, k)).join('|'); if (!groups.has(sig)) groups.set(sig, []); groups.get(sig).push(p); });
+    const ranges = [...groups.values()].filter((g) => new Set(g.map((p) => level(p.r, key))).size > 1).map((g) => { const ys = g.map((p) => p.y); return Math.max(...ys) - Math.min(...ys); });
+    if (ranges.length) return { key, effect: mean(ranges), n: ranges.length, mode: 'pares' };
+    const lv = new Map();
+    pts.forEach((p) => { const x = level(p.r, key); if (!lv.has(x)) lv.set(x, []); lv.get(x).push(p.y); });
+    const ms = [...lv.values()].map(mean);
+    return { key, effect: ms.length > 1 ? Math.max(...ms) - Math.min(...ms) : 0, n: ms.length, mode: 'médias' };
+  }).sort((a, b) => b.effect - a.effect);
+  const total = rows.reduce((s, r) => s + r.effect, 0);
+  let acc = 0;
+  return rows.map((r) => { const pct = total > 0 ? (r.effect / total) * 100 : 0; acc += pct; return { ...r, pct, cum: acc }; });
+}
+
+/**
  * Séries para gráfico XY. perElement: y é família ('Cl', 'L'...) → uma série por elemento (+ total).
  * Avisos de condições incompatíveis: entradas que variam dentro de uma série, valores de referência
  * diferentes, mistura de dados de exemplo com dados reais e pacotes com nº de elementos diferente.
