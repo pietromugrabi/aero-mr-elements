@@ -157,6 +157,8 @@ export function readOutputsText(text, pkg) {
 }
 
 const ratio = (a, b) => (Number.isFinite(a) && Number.isFinite(b) && b !== 0 ? a / b : null);
+/** Eficiência em módulo: |Cl|/|Cd| (downforce sai negativa no Fluent, então "maior" tem que valer para o módulo). */
+const absRatio = (a, b) => (Number.isFinite(a) && Number.isFinite(b) && b !== 0 ? Math.abs(a) / Math.abs(b) : null);
 
 /**
  * Valores calculados de um DP (não persistidos).
@@ -191,13 +193,13 @@ export function computeDP(dp, pkg, { sumIfMissing = false } = {}) {
   res.L = L; res.D = D;
   res.Cl = L !== null && qa > 0 ? L / qa : null;
   res.Cd = D !== null && qa > 0 ? D / qa : null;
-  res.ClCd = ratio(res.Cl, res.Cd);
-  res.LD = ratio(L, D);
+  res.ClCd = absRatio(res.Cl, res.Cd);
+  res.LD = absRatio(L, D);
   for (let i = 0; i < n; i++) {
     const qa_i = ref.q * ref.Ael[i];
     const Cl = elL[i] !== null && qa_i > 0 ? elL[i] / qa_i : null;
     const Cd = elD[i] !== null && qa_i > 0 ? elD[i] / qa_i : null;
-    res.perEl.push({ L: elL[i], D: elD[i], Cl, Cd, ClCd: ratio(Cl, Cd), share: L ? ratio(elL[i], L) : null });
+    res.perEl.push({ L: elL[i], D: elD[i], Cl, Cd, ClCd: absRatio(Cl, Cd), share: L ? ratio(elL[i], L) : null });
   }
   return res;
 }
@@ -206,11 +208,11 @@ export function computeDP(dp, pkg, { sumIfMissing = false } = {}) {
 export function metricList(n) {
   const m = [
     { key: 'L', label: 'Lift_force', unit: 'N' }, { key: 'D', label: 'Drag_force', unit: 'N' },
-    { key: 'Cl', label: 'Cl_total', unit: '—' }, { key: 'Cd', label: 'Cd_total', unit: '—' }, { key: 'ClCd', label: 'Cl/Cd total', unit: '—' },
+    { key: 'Cl', label: 'Cl_total', unit: '—' }, { key: 'Cd', label: 'Cd_total', unit: '—' }, { key: 'ClCd', label: '|Cl|/Cd total', unit: '—' },
   ];
   for (let i = 1; i <= n; i++) {
     m.push({ key: `L_${i}`, label: `lift_el${i}`, unit: 'N', el: i }, { key: `D_${i}`, label: `drag_el${i}`, unit: 'N', el: i },
-      { key: `Cl_${i}`, label: `Cl_el${i}`, unit: '—', el: i }, { key: `Cd_${i}`, label: `Cd_el${i}`, unit: '—', el: i }, { key: `ClCd_${i}`, label: `Cl/Cd el${i}`, unit: '—', el: i });
+      { key: `Cl_${i}`, label: `Cl_el${i}`, unit: '—', el: i }, { key: `Cd_${i}`, label: `Cd_el${i}`, unit: '—', el: i }, { key: `ClCd_${i}`, label: `|Cl|/Cd el${i}`, unit: '—', el: i });
   }
   return m;
 }

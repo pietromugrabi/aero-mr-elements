@@ -85,7 +85,7 @@ function summarySheet(project, pkg, run, opts) {
   rows.push([]);
   rows.push(sec('Melhores Design Points'));
   rows.push(hdr('Critério', 'DP', 'Valor', 'Observação'));
-  [['Maior Cl_total', 'Cl', false], ['Maior Cl/Cd', 'ClCd', false], ['Menor Cd_total', 'Cd', true], ['Maior Lift_force [N]', 'L', false]].forEach(([lab, k, low]) => { const b = best(k, low); rows.push([lab, b ? b.d.name : '—', b ? r6(b.c[k]) : '—', b?.d.outputs?.isExample ? 'dado de exemplo' : '']); });
+  [['Maior Cl_total', 'Cl', false], ['Maior |Cl|/Cd', 'ClCd', false], ['Menor Cd_total', 'Cd', true], ['Maior Lift_force [N]', 'L', false]].forEach(([lab, k, low]) => { const b = best(k, low); rows.push([lab, b ? b.d.name : '—', b ? r6(b.c[k]) : '—', b?.d.outputs?.isExample ? 'dado de exemplo' : '']); });
   rows.push([]);
   rows.push(sec('Verificações'));
   const checks = [...(w.plane ? w.asm.checks.map((x) => `[${x.level}] ${x.msg}`) : w.errors.map((m) => `[erro] ${m}`)),
@@ -103,7 +103,7 @@ function summarySheet(project, pkg, run, opts) {
 function perDpSheet(pkg, run, opts) {
   const tp = topologyOf(pkg);
   const vars = [...doeVariables(pkg), ...derivedColumns(pkg)].sort((a, b) => (a.element ?? 99) - (b.element ?? 99));
-  const rows = [[{ v: `Relatório por Design Point — ${run.name}`, s: XS.title }], [{ v: 'Cada bloco é uma simulação (DP). Coeficientes: q = ½ρU², C = F/(q·A_ref); Cl/Cd só com Cd ≠ 0; totais nunca são médias.', s: XS.note }], []];
+  const rows = [[{ v: `Relatório por Design Point — ${run.name}`, s: XS.title }], [{ v: 'Cada bloco é uma simulação (DP). Coeficientes: q = ½ρU², C = F/(q·A_ref); |Cl|/Cd só com Cd ≠ 0; totais nunca são médias.', s: XS.note }], []];
   run.dps.forEach((dp) => {
     const c = computeDP(dp, pkg, opts);
     const w = buildWing(pkg, dp.inputs);
@@ -112,9 +112,9 @@ function perDpSheet(pkg, run, opts) {
     vars.forEach((v) => { const x = Number(dp.inputs[v.key]); if (Number.isFinite(x)) rows.push([v.label, r6(x), v.unit, v.derived ? 'derivado da corda' : v.note || '']); });
     if (c.has) {
       rows.push(hdr('Saída total', 'Valor', 'Unidade', 'Origem'));
-      [['Lift_force', c.L, 'N'], ['Drag_force', c.D, 'N'], ['Cl_total', c.Cl, '—'], ['Cd_total', c.Cd, '—'], ['Cl/Cd', c.ClCd, '—'], ['q = ½ρU²', c.ref.q, 'Pa'], ['A_ref', c.ref.Aref, 'm²'], ['Uinf', c.ref.U, 'm/s']]
+      [['Lift_force', c.L, 'N'], ['Drag_force', c.D, 'N'], ['Cl_total', c.Cl, '—'], ['Cd_total', c.Cd, '—'], ['|Cl|/Cd', c.ClCd, '—'], ['q = ½ρU²', c.ref.q, 'Pa'], ['A_ref', c.ref.Aref, 'm²'], ['Uinf', c.ref.U, 'm/s']]
         .forEach(([k, v, u], j) => rows.push([k, r6(v), u, j < 2 ? 'bruto (Fluent)' : j < 5 ? 'calculado' : 'referência']));
-      rows.push(hdr('Elemento', 'Tipo', 'Lift [N]', 'Drag [N]', 'Cl', 'Cd', 'Cl/Cd', '% do Lift'));
+      rows.push(hdr('Elemento', 'Tipo', 'Lift [N]', 'Drag [N]', 'Cl', 'Cd', '|Cl|/Cd', '% do Lift'));
       c.perEl.forEach((e, i) => rows.push([i + 1, tp.kinds[i], r6(e.L), r6(e.D), r6(e.Cl), r6(e.Cd), r6(e.ClCd), e.share == null ? '' : r6(100 * e.share)]));
       c.flags.forEach((m) => rows.push([{ v: `Aviso: ${m}`, s: XS.warn }]));
     } else rows.push([{ v: 'Sem resultados importados para este DP.', s: XS.note }]);
@@ -142,7 +142,7 @@ function chartsSheet(pkg, run, opts) {
   const gv = (r) => (gKey ? Number(r.inputs[gKey]) : 0);
   const gName = (g) => (!gKey ? 'todos os DPs' : /^gurney_on/.test(gKey) ? (g >= 0.5 ? 'com Gurney' : 'sem Gurney') : `${gKey} = ${g}`);
   recs.sort((a, b) => gv(a) - gv(b) || xv(a) - xv(b));
-  const headers = ['DP', 'nº', xLab, gKey ? `grupo (${gKey})` : 'grupo', 'Lift_force [N]', 'Drag_force [N]', 'Cl_total', 'Cd_total', 'Cl/Cd', ...Array.from({ length: n }, (_, i) => `Cl_el${i + 1}`), ...Array.from({ length: n }, (_, i) => `Cd_el${i + 1}`), 'exemplo?'];
+  const headers = ['DP', 'nº', xLab, gKey ? `grupo (${gKey})` : 'grupo', 'Lift_force [N]', 'Drag_force [N]', 'Cl_total', 'Cd_total', '|Cl|/Cd', ...Array.from({ length: n }, (_, i) => `Cl_el${i + 1}`), ...Array.from({ length: n }, (_, i) => `Cd_el${i + 1}`), 'exemplo?'];
   const rows = recs.map((r) => [r.dp.name, r.idx, r6(xv(r)), gName(gv(r)), r6(r.c.L), r6(r.c.D), r6(r.c.Cl), r6(r.c.Cd), r6(r.c.ClCd), ...r.c.perEl.map((e) => r6(e.Cl)), ...r.c.perEl.map((e) => r6(e.Cd)), r.dp.outputs?.isExample ? 'SIM (sintético)' : 'não']);
   // faixas por grupo (linhas 1..N da planilha, pois a linha 0 é o cabeçalho)
   const groups = [];
@@ -156,7 +156,7 @@ function chartsSheet(pkg, run, opts) {
   const ex = recs.some((r) => r.dp.outputs?.isExample) ? ' — DADOS DE EXEMPLO' : '';
   add({ title: `Cl_total × ${xKey || 'DP'}${ex}`, xTitle: xLab, yTitle: 'Cl_total', series: grouped(col.Cl) });
   add({ title: `Cd_total × ${xKey || 'DP'}${ex}`, xTitle: xLab, yTitle: 'Cd_total', series: grouped(col.Cd) });
-  add({ title: `Cl/Cd × ${xKey || 'DP'}${ex}`, xTitle: xLab, yTitle: 'Cl/Cd', series: grouped(col.ClCd) });
+  add({ title: `|Cl|/Cd × ${xKey || 'DP'}${ex}`, xTitle: xLab, yTitle: '|Cl|/Cd', series: grouped(col.ClCd) });
   add({ title: `Lift_force × ${xKey || 'DP'}${ex}`, xTitle: xLab, yTitle: 'Lift_force [N]', series: grouped(col.L) });
   add({ title: `Drag_force × ${xKey || 'DP'}${ex}`, xTitle: xLab, yTitle: 'Drag_force [N]', series: grouped(col.D) });
   add({ title: `Polar Cl × Cd${ex}`, xTitle: 'Cd_total', yTitle: 'Cl_total', lines: false, series: groups.map((g, k) => ({ name: g.name, color: PALETTE[k % 8], x: [col.Cd, g.r0, g.r1], y: [col.Cl, g.r0, g.r1], xs: colVals(col.Cd, g), ys: colVals(col.Cl, g) })) });
