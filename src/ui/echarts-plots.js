@@ -111,6 +111,26 @@ export function barChart(items, opts = {}) {
   }, () => barSvg(items, opts));
 }
 
+// ------------------------------------------------------------------ Pareto de sensibilidade
+/** items: [{label, pct, cum, effect}] em ordem decrescente; barras e acumulado no mesmo eixo (%). opts: {metric, name} */
+export function paretoChart(items, opts = {}) {
+  return mount(opts.height || 420, () => {
+    const th = theme(), { option, numFont } = base(th, opts.name);
+    return {
+      ...option,
+      grid: { left: 64, right: 28, top: 48, bottom: 72 },
+      legend: { left: 8, top: 8, textStyle: { color: th.text2 }, inactiveColor: th.muted },
+      tooltip: { ...option.tooltip, trigger: 'axis', axisPointer: { type: 'shadow' }, formatter: (ps) => { const it = items[ps[0].dataIndex]; return `<b>${esc(it.label)}</b><br>efeito em ${esc(opts.metric || '')} = ${num(it.effect)}<br>${num(it.pct, 3)} % do total<br>acumulado: ${num(it.cum, 3)} %`; } },
+      xAxis: { type: 'category', data: items.map((i) => i.label), axisLabel: { color: th.text2, interval: 0, rotate: items.length > 8 ? 30 : 0 }, axisLine: { lineStyle: { color: th.axis } }, axisTick: { show: false } },
+      yAxis: axis(th, numFont, { type: 'value', min: 0, max: 100, name: '% do efeito total', nameGap: 44 }),
+      series: [
+        { name: 'Efeito do parâmetro', type: 'bar', barMaxWidth: 46, data: items.map((i) => i.pct), itemStyle: { color: th.series[0], borderRadius: 2 }, label: { show: true, position: 'top', color: th.text, fontFamily: numFont, formatter: (p) => `${fmtSig(p.value, 3)} %` } },
+        { name: 'Acumulado', type: 'line', symbol: 'circle', symbolSize: 7, data: items.map((i) => i.cum), lineStyle: { width: 2, color: th.series[1] }, itemStyle: { color: th.series[1], borderColor: th.surface, borderWidth: 1.5 } },
+      ],
+    };
+  }, () => barSvg(items.map((i) => ({ label: i.label, value: i.pct, detail: `acumulado ${fmtSig(i.cum, 3)} %` })), { metric: '% do efeito total', name: opts.name }));
+}
+
 // ------------------------------------------------------------------ Mapa de calor
 /** grid[iy][ix] = {z, n, min, max, label} | null; points = DPs de CFD sobre a superfície ajustada */
 export function heatmapChart(data, opts = {}) {
