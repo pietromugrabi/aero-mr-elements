@@ -87,8 +87,8 @@ export default function outputs(ctx) {
   if (ui.view === 'calc') {
     tbl = h('table', null,
       h('thead', null, h('tr', { class: 'grp' }, h('th', { colspan: 4 }, ''), h('th', { colspan: 5 }, 'Total'), Array.from({ length: n }, (_, i) => h('th', { colspan: 6 }, `Elemento ${i + 1}`)), h('th', null, '')),
-        h('tr', null, ['DP', 'Uinf [m/s]', 'q [Pa]', 'A_ref [m²]', 'Lift_force [N]', 'Drag_force [N]', 'Cl_total', 'Cd_total', 'Cl/Cd'].map((t) => h('th', { class: 'num' }, t)),
-          Array.from({ length: n }, (_, i) => [`lift_el${i + 1} [N]`, `drag_el${i + 1} [N]`, 'Cl', 'Cd', 'Cl/Cd', '% do L'].map((t) => h('th', { class: 'num' }, t))), h('th', null, 'Avisos'))),
+        h('tr', null, ['DP', 'Uinf [m/s]', 'q [Pa]', 'A_ref [m²]', 'Lift_force [N]', 'Drag_force [N]', 'Cl_total', 'Cd_total', '|Cl|/Cd'].map((t) => h('th', { class: 'num' }, t)),
+          Array.from({ length: n }, (_, i) => [`lift_el${i + 1} [N]`, `drag_el${i + 1} [N]`, 'Cl', 'Cd', '|Cl|/Cd', '% do L'].map((t) => h('th', { class: 'num' }, t))), h('th', null, 'Avisos'))),
       h('tbody', null, withRes.map(({ d, c }) => h('tr', null, h('td', null, d.name, ' ', d.outputs.isExample ? badge('exemplo', 'example') : null, d.outputsStale ? badge('entrada alterada', 'warn') : null),
         cell(c.ref.U), cell(c.ref.q), cell(c.ref.Aref), cell(c.L), cell(c.D), cell(c.Cl), cell(c.Cd), cell(c.ClCd),
         c.perEl.map((e) => [cell(e.L), cell(e.D), cell(e.Cl), cell(e.Cd), cell(e.ClCd), h('td', { class: 'num' }, e.share == null ? '—' : `${fv(100 * e.share, 3)} %`)]),
@@ -109,7 +109,7 @@ export default function outputs(ctx) {
       h('button', { class: 'small', onclick: () => download(`${fname}.xlsx`, new Blob([xlsxOf([{ name: 'Saidas', ...outputsTable(prj, pkg, run, opts) }])], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })) }, 'Excel (.xlsx)'),
       h('button', { class: 'small danger', disabled: !withRes.length || null, onclick: async () => { if (await confirmBox('Apagar resultados', `Apagar os resultados importados dos ${withRes.length} DP(s) desta rodada? As entradas são mantidas.`, 'Apagar', true)) store.update(() => { run.dps.forEach((d) => { d.outputs = null; d.status = 'pendente'; }); }, ['outputs', run.name, 'resultados apagados']); } }, 'Apagar resultados')),
     withRes.length ? h('div', { class: 'table-wrap tall' }, tbl) : h('div', { class: 'empty' }, 'Sem resultados nesta rodada. Importe o CSV do Workbench acima.'),
-    mathBlock('q = ½·ρ·U²   CL = L / (q·A_ref)   CD = D / (q·A_ref)   Cl/Cd só quando CD ≠ 0\nTotais = relatório total do Fluent (ou Σ elementos, se marcado). Nunca são médias. Valores calculados não são gravados: são recalculados a partir dos dados brutos.', { style: { marginTop: '10px' } }));
+    mathBlock('q = ½·ρ·U²   CL = L / (q·A_ref)   CD = D / (q·A_ref)   |Cl|/Cd só quando CD ≠ 0\nTotais = relatório total do Fluent (ou Σ elementos, se marcado). Nunca são médias. Valores calculados não são gravados: são recalculados a partir dos dados brutos.', { style: { marginTop: '10px' } }));
 
   const reportBtn = h('button', { class: 'primary', onclick: () => { try { download(safeName(`Relatorio_${pkg.name}_${run.name}`) + '.xlsx', new Blob([runReportXlsx(prj, pkg, run, opts)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })); } catch (e) { toast(`Falha ao gerar o relatório: ${e.message}`, true); } } }, 'Baixar relatório completo (Excel)');
   return h('div', null, pageHead(`Outputs — ${run.name}`, 'Resultados por Design Point: dados brutos importados e coeficientes calculados (separados).', reportBtn),

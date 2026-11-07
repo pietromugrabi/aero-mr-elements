@@ -72,7 +72,7 @@ export default function dashboard(ctx) {
 
   const recs = filterRecords(collectRecords(prj), {});
   const top = (m) => ranking(recs, m, { limit: 5 });
-  const tops = [['Cl', 'Maior Cl_total'], ['ClCd', 'Maior Cl/Cd total']];
+  const tops = [['Cl', 'Maior Cl_total'], ['ClCd', 'Maior |Cl|/Cd total']];
 
   return h('div', null,
     hero('Estudos CFD de perfis multielemento · SolidWorks + ANSYS Workbench/Fluent'),
@@ -87,7 +87,7 @@ export default function dashboard(ctx) {
     h('div', { class: 'grid g2' },
       ...tops.map(([m, title]) => card(title, top(m).length ? table([
         { label: 'DP', get: (e) => e.rec.dpName }, { label: 'Pacote / rodada', get: (e) => `${e.rec.pkgName} / ${e.rec.runName}` },
-        { label: m === 'Cl' ? 'Cl' : 'Cl/Cd', num: true, get: (e) => fv(e.v, 4) }, { label: '', get: (e) => (e.rec.isExample ? badge('exemplo', 'example') : '') },
+        { label: m === 'Cl' ? 'Cl' : '|Cl|/Cd', num: true, get: (e) => fv(e.v, 4) }, { label: '', get: (e) => (e.rec.isExample ? badge('exemplo', 'example') : '') },
       ], top(m)) : h('p', { class: 'muted' }, 'Sem resultados importados.')))),
     h('div', { class: 'grid g2' },
       card('Alterações recentes', prj.history.length ? table([
