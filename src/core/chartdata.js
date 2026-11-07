@@ -76,13 +76,17 @@ export function varyingInputs(recs, ignore = []) {
  * O efeito compara só DPs iguais em todas as outras entradas (amplitude dentro de cada grupo, com
  * média entre os grupos); assim vale para variar um parâmetro por vez e para fatoriais. Se não
  * houver DPs comparáveis, usa a diferença entre as médias por nível (mode 'médias').
- * @returns [{key, effect, pct, cum, n, mode}] do maior para o menor efeito
+ * Entradas que variam sempre juntas viram um item só (keys lista todas).
+ * @returns [{key, keys, effect, pct, cum, n, mode}] do maior para o menor efeito
  */
 export function sensitivity(recs, metric, { ignore = ['Uinf'] } = {}) {
-  const keys = varyingInputs(recs, ignore);
+  const level = (r, k) => fmtV(Number(r.inputs[k]));
+  // entradas presas uma à outra (ex.: AoA com deflexão constante) têm um efeito só: viram uma barra
+  const tied = (a, b) => { const ab = new Map(), ba = new Map(); return recs.every((r) => { const x = level(r, a), y = level(r, b); if ((ab.has(x) && ab.get(x) !== y) || (ba.has(y) && ba.get(y) !== x)) return false; ab.set(x, y); ba.set(y, x); return true; }); };
+  const keys = [], tiedTo = new Map();
+  varyingInputs(recs, ignore).forEach((k) => { const rep = keys.find((x) => tied(x, k)); if (rep) tiedTo.get(rep).push(k); else { keys.push(k); tiedTo.set(k, [k]); } });
   const pts = recs.map((r) => ({ r, y: Math.abs(valueOf(r, metric)) })).filter((p) => Number.isFinite(p.y));
   const mean = (a) => a.reduce((s, v) => s + v, 0) / a.length;
-  const level = (r, k) => fmtV(Number(r.inputs[k]));
   const rows = keys.map((key) => {
     const others = keys.filter((k) => k !== key);
     const groups = new Map();
@@ -96,7 +100,7 @@ export function sensitivity(recs, metric, { ignore = ['Uinf'] } = {}) {
   }).sort((a, b) => b.effect - a.effect);
   const total = rows.reduce((s, r) => s + r.effect, 0);
   let acc = 0;
-  return rows.map((r) => { const pct = total > 0 ? (r.effect / total) * 100 : 0; acc += pct; return { ...r, pct, cum: acc }; });
+  return rows.map((r) => { const pct = total > 0 ? (r.effect / total) * 100 : 0; acc += pct; return { ...r, keys: tiedTo.get(r.key), pct, cum: acc }; });
 }
 
 /**
