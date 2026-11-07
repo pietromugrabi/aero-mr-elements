@@ -176,12 +176,14 @@ export default function graficos(ctx) {
     if (new Set(recs.map((r) => r.runId)).size > 1) warn.push('Os DPs vêm de mais de uma rodada: filtre uma rodada para comparar condições iguais.');
     if (sv.some((s) => s.mode === 'médias')) warn.push('Alguns parâmetros não têm DPs comparáveis (iguais em todo o resto): para eles o efeito usa a média por nível e mistura o efeito dos outros parâmetros.');
     warn.push(...refWarnings(recs));
-    sv.forEach((s) => csvRows.push([nameOf(s.key), s.effect, s.pct, s.cum, s.n, s.mode]));
+    const svName = (s) => s.keys.map(nameOf).join(' + ');
+    if (sv.some((s) => s.keys.length > 1)) warn.push(`Variam sempre juntos, por isso aparecem numa barra só: ${sv.filter((s) => s.keys.length > 1).map(svName).join('; ')}.`);
+    sv.forEach((s) => csvRows.push([svName(s), s.effect, s.pct, s.cum, s.n, s.mode]));
     if (!sv.length) out.push(h('div', { class: 'empty' }, 'Nenhum parâmetro varia nos DPs filtrados.'));
     else out.push(card(`Pareto de sensibilidade — |${metLabel}|`,
       h('p', { class: 'muted' }, 'Efeito = quanto a métrica muda ao variar só aquele parâmetro. A faixa testada influencia o resultado: um parâmetro testado numa faixa maior tende a parecer mais sensível.'),
-      paretoChart(sv.map((s) => ({ label: nameOf(s.key), pct: s.pct, cum: s.cum, effect: s.effect })), { metric: metLabel, name: `pareto_${cfg.metric}` }),
-      table([{ label: '#', get: (_, i) => i + 1 }, { label: 'Parâmetro', get: (s) => nameOf(s.key) }, { label: 'Efeito', num: true, get: (s) => fv(s.effect, 4) }, { label: '% do total', num: true, get: (s) => fv(s.pct, 3) }, { label: '% acumulado', num: true, get: (s) => fv(s.cum, 3) }, { label: 'Comparações', num: true, get: (s) => s.n }], sv)));
+      paretoChart(sv.map((s) => ({ label: svName(s), pct: s.pct, cum: s.cum, effect: s.effect })), { metric: metLabel, name: `pareto_${cfg.metric}` }),
+      table([{ label: '#', get: (_, i) => i + 1 }, { label: 'Parâmetro', get: svName }, { label: 'Efeito', num: true, get: (s) => fv(s.effect, 4) }, { label: '% do total', num: true, get: (s) => fv(s.pct, 3) }, { label: '% acumulado', num: true, get: (s) => fv(s.cum, 3) }, { label: 'Comparações', num: true, get: (s) => s.n }], sv)));
   }
   const csvHeaders = { pareto: ['parâmetro', 'efeito', '% do total', '% acumulado', 'comparações', 'método'], xy: ['série', 'x', 'valor x', 'y', 'valor y', 'DP', 'pacote', 'rodada', 'exemplo'], scatter: ['série', 'x', 'valor x', 'y', 'valor y', 'DP', 'pacote', 'rodada', 'exemplo'], heatmap: ['x', 'valor x', 'y', 'valor y', 'métrica', 'valor', 'nº DPs', 'DPs'], surface: ['x', 'valor x', 'y', 'valor y', 'métrica', 'CFD', 'ajuste', 'DP'], ranking: ['DP', 'pacote', 'rodada', 'métrica', 'valor'], matrix: ['grupo', 'DPs', 'Cl máx', 'Cl/Cd máx', 'Cd mín', 'L máx', 'D mín'] }[cfg.type];
   return h('div', null,
