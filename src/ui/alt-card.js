@@ -9,7 +9,7 @@ import { uid } from '../core/model.js';
 import { metricList } from '../core/outputs.js';
 import { altConfig, CRITERIA, NEIGHBOR_MODES, stagesOf, stageDps, stageErrors, stageRows, stageCount, stageTable, carried, overallBest, stageEdges, keysUpTo, keysWithDeflection, deflectionPairs } from '../core/alternada.js';
 
-const SHOW = [['L', '|lift|'], ['Cl', 'Cl'], ['Cd', 'Cd'], ['ClCd', 'Cl/Cd']];
+const SHOW = [['L', '|lift|'], ['Cl', 'Cl'], ['Cd', 'Cd'], ['ClCd', '|Cl|/Cd']];
 
 /** Tabela da etapa no formato da planilha: máximo em vermelho, vizinhos que seguem em verde. */
 function stageTableEl(pkg, run, k, metric, info, labelOf, unitOf) {
