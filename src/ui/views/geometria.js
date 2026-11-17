@@ -6,7 +6,7 @@ import { setElementCount, syncDependentLists, addSlat, addUpperflap } from '../.
 import { resolveTopology, leToLe } from '../../core/assembly.js';
 import { pairOf, gurneyConfigured, isRelGap, gapBaseIndex, pairName, setGapPoint } from '../../core/wing.js';
 import { applyReferenceStudy } from '../../core/demo.js';
-import { S1223_DAT, NACA23012_DAT, E423_DAT, FX74CL5140_DAT } from '../../core/samples-data.js';
+import { S1223_DAT, NACA23012_DAT, NACA2408_DAT, E423_DAT, FX74CL5140_DAT } from '../../core/samples-data.js';
 import { describeTransform, directions, planeAxes, toPlane } from '../../core/transform.js';
 import { pivotLocal } from '../../core/pivots.js';
 import { DEG, rotate } from '../../core/geom.js';
@@ -182,6 +182,7 @@ function elementCard(pkg, i, w) {
       h('button', { onclick: async () => { const f = await pickFile('.dat,.txt,.csv'); if (f) loadDat(f.text, f.name); } }, 'Carregar .dat…'),
       h('button', { class: 'small', onclick: () => loadDat(S1223_DAT, 'S1223.dat') }, 'Amostra S1223'),
       h('button', { class: 'small', onclick: () => loadDat(NACA23012_DAT, 'NACA23012.dat') }, 'Amostra NACA 23012'),
+      h('button', { class: 'small', onclick: () => loadDat(NACA2408_DAT, 'NACA2408.dat') }, 'Amostra NACA 2408'),
       h('button', { class: 'small', onclick: () => loadDat(E423_DAT, 'E423.dat') }, 'Amostra E423'),
       h('button', { class: 'small', onclick: () => loadDat(FX74CL5140_DAT, 'FX74_CL5_140.dat') }, 'Amostra FX 74-CL5-140'),
       el.datFileName ? h('span', { class: 'muted' }, `arquivo: ${el.datFileName}`) : badge('sem .dat', 'warn'),
